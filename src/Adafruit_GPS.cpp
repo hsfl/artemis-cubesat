@@ -1,3 +1,24 @@
+/**************************************************************************/
+/*!
+  @file Adafruit_GPS.cpp
+  @mainpage Adafruit Ultimate GPS Breakout
+  @section intro Introduction
+  This is the Adafruit GPS library - the ultimate GPS library
+  for the ultimate GPS module!
+  Tested and works great with the Adafruit Ultimate GPS module
+  using MTK33x9 chipset
+  ------> http://www.adafruit.com/products/746
+  Adafruit invests time and resources providing this open source code,
+  please support Adafruit and open-source hardware by purchasing
+  products from Adafruit!
+  @section author Author
+  Written by Limor Fried/Ladyada for Adafruit Industries.
+  @section license License
+  BSD license, check license.txt for more information
+  All text above must be included in any redistribution
+*/
+/**************************************************************************/
+
 #include <Adafruit_GPS.h>
 
 static bool strStartsWith(const char *str, const char *prefix);
