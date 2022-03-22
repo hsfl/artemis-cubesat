@@ -36,8 +36,8 @@ const int chipSelect = BUILTIN_SDCARD;
 #include <NativeEthernet.h>
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 IPAddress remoteIp(192, 168, 1, 161);  // <- EDIT!!!!
-unsigned short remotePort = 8888;
-unsigned short localPort = 8888;
+unsigned short remotePort = 10091;
+unsigned short localPort = 10091;
 EthernetUDP udp;
 
 void setup()
@@ -234,6 +234,7 @@ void loop() // run over and over again
       // To compute the appropriate capacity, go to https://arduinojson.org/v6/assistant/
 
       doc["time"] = millis();
+      doc["node_name"] = "artemis";
 
       JsonObject gps = doc.createNestedObject("gps");
       gps["long"] = GPS.longitude;
