@@ -1,482 +1,166 @@
-/**
- * Copyright (c) 2011-2021 Bill Greiman
- * This file is part of the SdFat library for SD memory cards.
+/* Arduino SdFat Library
+ * Copyright (C) 2009 by William Greiman
  *
- * MIT License
+ * This file is part of the Arduino SdFat Library
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
+ * This Library is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
+ * This Library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * You should have received a copy of the GNU General Public License
+ * along with the Arduino SdFat Library.  If not, see
+ * <http://www.gnu.org/licenses/>.
  */
 #ifndef SdFat_h
 #define SdFat_h
 /**
  * \file
- * \brief main SdFs include file.
+ * SdFile and SdVolume classes
  */
-#include "common/SysCall.h"
-#include "SdCard/SdCard.h"
-#include "ExFatLib/ExFatLib.h"
-#include "FatLib/FatLib.h"
-#include "FsLib/FsLib.h"
-#if INCLUDE_SDIOS
-#include "sdios.h"
-#endif  // INCLUDE_SDIOS
+#ifdef __AVR__
+#include <avr/pgmspace.h>
+#endif
+#include "Sd2Card.h"
+#include "FatStructs.h"
+#include "Print.h"
 //------------------------------------------------------------------------------
-/** SdFat version for cpp use. */
-#define SD_FAT_VERSION 20102
-/** SdFat version as string. */
-#define SD_FAT_VERSION_STR "2.1.2"
+/**
+ * Allow use of deprecated functions if non-zero
+ */
+#define ALLOW_DEPRECATED_FUNCTIONS 1
+//------------------------------------------------------------------------------
+// forward declaration since SdVolume is used in SdFile
+class SdVolume;
 //==============================================================================
-/**
- * \class SdBase
- * \brief base SD file system template class.
- */
-template <class Vol, class Fmt>
-class SdBase : public Vol {
- public:
-  //----------------------------------------------------------------------------
-  /** Initialize SD card and file system.
-   *
-   * \param[in] csPin SD card chip select pin.
-   * \return true for success or false for failure.
-   */
-  bool begin(SdCsPin_t csPin = SS) {
-#ifdef BUILTIN_SDCARD
-    if (csPin == BUILTIN_SDCARD) {
-      return begin(SdioConfig(FIFO_SDIO));
-    }
-#endif  // BUILTIN_SDCARD
-    return begin(SdSpiConfig(csPin, SHARED_SPI));
-  }
-  //----------------------------------------------------------------------------
-  /** Initialize SD card and file system.
-   *
-   * \param[in] csPin SD card chip select pin.
-   * \param[in] maxSck Maximum SCK frequency.
-   * \return true for success or false for failure.
-   */
-  bool begin(SdCsPin_t csPin, uint32_t maxSck) {
-    return begin(SdSpiConfig(csPin, SHARED_SPI, maxSck));
-  }
-  //----------------------------------------------------------------------------
-  /** Initialize SD card and file system for SPI mode.
-   *
-   * \param[in] spiConfig SPI configuration.
-   * \return true for success or false for failure.
-   */
-  bool begin(SdSpiConfig spiConfig) {
-    return cardBegin(spiConfig) && Vol::begin(m_card);
-  }
-  //---------------------------------------------------------------------------
-  /** Initialize SD card and file system for SDIO mode.
-   *
-   * \param[in] sdioConfig SDIO configuration.
-   * \return true for success or false for failure.
-   */
-  bool begin(SdioConfig sdioConfig) {
-    return cardBegin(sdioConfig) && Vol::begin(m_card);
-  }
-  //----------------------------------------------------------------------------
-  /** \return Pointer to SD card object. */
-  SdCard* card() {return m_card;}
-  //----------------------------------------------------------------------------
-  /** Initialize SD card in SPI mode.
-   *
-   * \param[in] spiConfig SPI configuration.
-   * \return true for success or false for failure.
-   */
-  bool cardBegin(SdSpiConfig spiConfig) {
-    m_card = m_cardFactory.newCard(spiConfig);
-    return m_card && !m_card->errorCode();
-  }
-  //----------------------------------------------------------------------------
-  /** Initialize SD card in SDIO mode.
-   *
-   * \param[in] sdioConfig SDIO configuration.
-   * \return true for success or false for failure.
-   */
-  bool cardBegin(SdioConfig sdioConfig) {
-    m_card = m_cardFactory.newCard(sdioConfig);
-    return m_card && !m_card->errorCode();
-  }
-  //----------------------------------------------------------------------------
-  /** End use of card. */
-  void end() {
-    Vol::end();
-    if (m_card) {
-      m_card->end();
-    }
-  }
-  //----------------------------------------------------------------------------
-  /** %Print error info and halt.
-   *
-   * \param[in] pr Print destination.
-   */
-  void errorHalt(print_t* pr) {
-    if (sdErrorCode()) {
-      pr->print(F("SdError: 0X"));
-      pr->print(sdErrorCode(), HEX);
-      pr->print(F(",0X"));
-      pr->println(sdErrorData(), HEX);
-    } else if (!Vol::fatType()) {
-      pr->println(F("Check SD format."));
-    }
-    while (true) {}
-  }
-  //----------------------------------------------------------------------------
-  /** %Print error info and halt.
-   *
-   * \param[in] pr Print destination.
-   * \param[in] msg Message to print.
-   */
-  void errorHalt(print_t* pr, const char* msg) {
-    pr->print(F("error: "));
-    pr->println(msg);
-    errorHalt(pr);
-  }
-  //----------------------------------------------------------------------------
-  /** %Print msg and halt.
-   *
-   * \param[in] pr Print destination.
-   * \param[in] msg Message to print.
-   */
-  void errorHalt(print_t* pr, const __FlashStringHelper* msg) {
-    pr->print(F("error: "));
-    pr->println(msg);
-    errorHalt(pr);
-  }
-  //----------------------------------------------------------------------------
-  /** Format SD card
-   *
-   * \param[in] pr Print destination.
-   * \return true for success else false.
-   */
-  bool format(print_t* pr = nullptr) {
-    Fmt fmt;
-    uint8_t* mem = Vol::end();
-    if (!mem) {
-      return false;
-    }
-    bool switchSpi = hasDedicatedSpi() && !isDedicatedSpi();
-    if (switchSpi && !setDedicatedSpi(true)) {
-      return 0;
-    }
-    bool rtn = fmt.format(card(), mem, pr);
-    if (switchSpi && !setDedicatedSpi(false)) {
-      return 0;
-    }
-    return rtn;
-  }
-  //----------------------------------------------------------------------------
-  /** \return the free cluster count. */
-  uint32_t freeClusterCount() {
-    bool switchSpi = hasDedicatedSpi() && !isDedicatedSpi();
-    if (switchSpi && !setDedicatedSpi(true)) {
-      return 0;
-    }
-    uint32_t rtn = Vol::freeClusterCount();
-    if (switchSpi && !setDedicatedSpi(false)) {
-      return 0;
-    }
-    return rtn;
-  }
-  //----------------------------------------------------------------------------
-  /** \return true if can be in dedicated SPI state */
-  bool hasDedicatedSpi() {return m_card ? m_card->hasDedicatedSpi() : false;}
-  //----------------------------------------------------------------------------
-  /** %Print error info and halt.
-   *
-   * \param[in] pr Print destination.
-   */
-  void initErrorHalt(print_t* pr) {
-    initErrorPrint(pr);
-    while (true) {}
-  }
-  //----------------------------------------------------------------------------
-  /** %Print error info and halt.
-   *
-   * \param[in] pr Print destination.
-   * \param[in] msg Message to print.
-   */
-  void initErrorHalt(print_t* pr, const char* msg) {
-    pr->println(msg);
-    initErrorHalt(pr);
-  }
-  //----------------------------------------------------------------------------
-  /** %Print error info and halt.
-   *
-   * \param[in] pr Print destination.
-   * \param[in] msg Message to print.
-   */
-  void initErrorHalt(print_t* pr, const __FlashStringHelper* msg) {
-    pr->println(msg);
-    initErrorHalt(pr);
-  }
-  //----------------------------------------------------------------------------
-  /** Print error details after begin() fails.
-   *
-   * \param[in] pr Print destination.
-   */
-  void initErrorPrint(print_t* pr) {
-    pr->println(F("begin() failed"));
-    if (sdErrorCode()) {
-      pr->println(F("Do not reformat the SD."));
-      if (sdErrorCode() == SD_CARD_ERROR_CMD0) {
-        pr->println(F("No card, wrong chip select pin, or wiring error?"));
-      }
-    }
-    errorPrint(pr);
-  }
-  //----------------------------------------------------------------------------
-  /** \return true if in dedicated SPI state. */
-  bool isDedicatedSpi() {return m_card ? m_card->isDedicatedSpi() : false;}
-  //----------------------------------------------------------------------------
-  /** %Print volume FAT/exFAT type.
-   *
-   * \param[in] pr Print destination.
-   */
-  void printFatType(print_t* pr) {
-    if (Vol::fatType() == FAT_TYPE_EXFAT) {
-      pr->print(F("exFAT"));
-    } else {
-      pr->print(F("FAT"));
-      pr->print(Vol::fatType());
-    }
-  }
-  //----------------------------------------------------------------------------
-  /** %Print SD errorCode and errorData.
-   *
-   * \param[in] pr Print destination.
-   */
-  void errorPrint(print_t* pr) {
-    if (sdErrorCode()) {
-      pr->print(F("SdError: 0X"));
-      pr->print(sdErrorCode(), HEX);
-      pr->print(F(",0X"));
-      pr->println(sdErrorData(), HEX);
-    } else if (!Vol::fatType()) {
-      pr->println(F("Check SD format."));
-    }
-  }
-  //----------------------------------------------------------------------------
-  /** %Print msg, any SD error code.
-   *
-   * \param[in] pr Print destination.
-   * \param[in] msg Message to print.
-   */
-  void errorPrint(print_t* pr, char const* msg) {
-    pr->print(F("error: "));
-    pr->println(msg);
-    errorPrint(pr);
-  }
+// SdFile class
 
-  /** %Print msg, any SD error code.
-   *
-   * \param[in] pr Print destination.
-   * \param[in] msg Message to print.
-   */
-  void errorPrint(print_t* pr, const __FlashStringHelper* msg) {
-    pr->print(F("error: "));
-    pr->println(msg);
-    errorPrint(pr);
-  }
-  //----------------------------------------------------------------------------
-  /** %Print error info and return.
-   *
-   * \param[in] pr Print destination.
-   */
-  void printSdError(print_t* pr) {
-    if (sdErrorCode()) {
-      if (sdErrorCode() == SD_CARD_ERROR_CMD0) {
-        pr->println(F("No card, wrong chip select pin, or wiring error?"));
-      }
-      pr->print(F("SD error: "));
-      printSdErrorSymbol(pr, sdErrorCode());
-      pr->print(F(" = 0x"));
-      pr->print(sdErrorCode(), HEX);
-      pr->print(F(",0x"));
-      pr->println(sdErrorData(), HEX);
-    } else if (!Vol::fatType()) {
-      pr->println(F("Check SD format."));
-    }
-  }
-  //----------------------------------------------------------------------------
-  /** \return SD card error code. */
-  uint8_t sdErrorCode() {
-    if (m_card) {
-      return m_card->errorCode();
-    }
-    return SD_CARD_ERROR_INVALID_CARD_CONFIG;
-  }
-  //----------------------------------------------------------------------------
-  /** \return SD card error data. */
-  uint8_t sdErrorData() {return m_card ? m_card->errorData() : 0;}
-  //----------------------------------------------------------------------------
-  /** Set SPI sharing state
-   * \param[in] value desired state.
-   * \return true for success else false;
-   */
-  bool setDedicatedSpi(bool value) {
-    if (m_card) {
-      return m_card->setDedicatedSpi(value);
-    }
-    return false;
-  }
-  //----------------------------------------------------------------------------
-  /** \return pointer to base volume */
-  Vol* vol() {return reinterpret_cast<Vol*>(this);}
-  //----------------------------------------------------------------------------
-  /** Initialize file system after call to cardBegin.
-   *
-   * \return true for success or false for failure.
-   */
-  bool volumeBegin() {
-     return Vol::begin(m_card);
-  }
-#if ENABLE_ARDUINO_SERIAL
-  /** Print error details after begin() fails. */
-  void initErrorPrint() {
-    initErrorPrint(&Serial);
-  }
-  //----------------------------------------------------------------------------
-  /** %Print msg to Serial and halt.
-   *
-   * \param[in] msg Message to print.
-   */
-  void errorHalt(const __FlashStringHelper* msg) {
-    errorHalt(&Serial, msg);
-  }
-  //----------------------------------------------------------------------------
-  /** %Print error info to Serial and halt. */
-  void errorHalt() {errorHalt(&Serial);}
-  //----------------------------------------------------------------------------
-  /** %Print error info and halt.
-   *
-   * \param[in] msg Message to print.
-   */
-  void errorHalt(const char* msg) {errorHalt(&Serial, msg);}
-  //----------------------------------------------------------------------------
-  /** %Print error info and halt. */
-  void initErrorHalt() {initErrorHalt(&Serial);}
-  //----------------------------------------------------------------------------
-  /** %Print msg, any SD error code.
-   *
-   * \param[in] msg Message to print.
-   */
-  void errorPrint(const char* msg) {errorPrint(&Serial, msg);}
-   /** %Print msg, any SD error code.
-   *
-   * \param[in] msg Message to print.
-   */
-  void errorPrint(const __FlashStringHelper* msg) {errorPrint(&Serial, msg);}
-  //----------------------------------------------------------------------------
-  /** %Print error info and halt.
-   *
-   * \param[in] msg Message to print.
-   */
-  void initErrorHalt(const char* msg) {initErrorHalt(&Serial, msg);}
-  //----------------------------------------------------------------------------
-  /** %Print error info and halt.
-   *
-   * \param[in] msg Message to print.
-   */
-  void initErrorHalt(const __FlashStringHelper* msg) {
-    initErrorHalt(&Serial, msg);
-  }
-#endif  // ENABLE_ARDUINO_SERIAL
-  //----------------------------------------------------------------------------
- private:
-  SdCard* m_card = nullptr;
-  SdCardFactory m_cardFactory;
-};
+// flags for ls()
+/** ls() flag to print modify date */
+uint8_t const LS_DATE = 1;
+/** ls() flag to print file size */
+uint8_t const LS_SIZE = 2;
+/** ls() flag for recursive list of subdirectories */
+uint8_t const LS_R = 4;
+
+// use the gnu style oflag in open()
+/** open() oflag for reading */
+uint8_t const O_READ = 0X01;
+/** open() oflag - same as O_READ */
+uint8_t const O_RDONLY = O_READ;
+/** open() oflag for write */
+uint8_t const O_WRITE = 0X02;
+/** open() oflag - same as O_WRITE */
+uint8_t const O_WRONLY = O_WRITE;
+/** open() oflag for reading and writing */
+uint8_t const O_RDWR = (O_READ | O_WRITE);
+/** open() oflag mask for access modes */
+uint8_t const O_ACCMODE = (O_READ | O_WRITE);
+/** The file offset shall be set to the end of the file prior to each write. */
+uint8_t const O_APPEND = 0X04;
+/** synchronous writes - call sync() after each write */
+uint8_t const O_SYNC = 0X08;
+/** create the file if nonexistent */
+uint8_t const O_CREAT = 0X10;
+/** If O_CREAT and O_EXCL are set, open() shall fail if the file exists */
+uint8_t const O_EXCL = 0X20;
+/** truncate the file to zero length */
+uint8_t const O_TRUNC = 0X40;
+
+// flags for timestamp
+/** set the file's last access date */
+uint8_t const T_ACCESS = 1;
+/** set the file's creation date and time */
+uint8_t const T_CREATE = 2;
+/** Set the file's write date and time */
+uint8_t const T_WRITE = 4;
+// values for type_
+/** This SdFile has not been opened. */
+uint8_t const FAT_FILE_TYPE_CLOSED = 0;
+/** SdFile for a file */
+uint8_t const FAT_FILE_TYPE_NORMAL = 1;
+/** SdFile for a FAT16 root directory */
+uint8_t const FAT_FILE_TYPE_ROOT16 = 2;
+/** SdFile for a FAT32 root directory */
+uint8_t const FAT_FILE_TYPE_ROOT32 = 3;
+/** SdFile for a subdirectory */
+uint8_t const FAT_FILE_TYPE_SUBDIR = 4;
+/** Test value for directory type */
+uint8_t const FAT_FILE_TYPE_MIN_DIR = FAT_FILE_TYPE_ROOT16;
+
+/** date field for FAT directory entry */
+static inline uint16_t FAT_DATE(uint16_t year, uint8_t month, uint8_t day) {
+  return (year - 1980) << 9 | month << 5 | day;
+}
+/** year part of FAT directory date field */
+static inline uint16_t FAT_YEAR(uint16_t fatDate) {
+  return 1980 + (fatDate >> 9);
+}
+/** month part of FAT directory date field */
+static inline uint8_t FAT_MONTH(uint16_t fatDate) {
+  return (fatDate >> 5) & 0XF;
+}
+/** day part of FAT directory date field */
+static inline uint8_t FAT_DAY(uint16_t fatDate) {
+  return fatDate & 0X1F;
+}
+/** time field for FAT directory entry */
+static inline uint16_t FAT_TIME(uint8_t hour, uint8_t minute, uint8_t second) {
+  return hour << 11 | minute << 5 | second >> 1;
+}
+/** hour part of FAT directory time field */
+static inline uint8_t FAT_HOUR(uint16_t fatTime) {
+  return fatTime >> 11;
+}
+/** minute part of FAT directory time field */
+static inline uint8_t FAT_MINUTE(uint16_t fatTime) {
+  return(fatTime >> 5) & 0X3F;
+}
+/** second part of FAT directory time field */
+static inline uint8_t FAT_SECOND(uint16_t fatTime) {
+  return 2*(fatTime & 0X1F);
+}
+/** Default date for file timestamps is 1 Jan 2000 */
+uint16_t const FAT_DEFAULT_DATE = ((2000 - 1980) << 9) | (1 << 5) | 1;
+/** Default time for file timestamp is 1 am */
+uint16_t const FAT_DEFAULT_TIME = (1 << 11);
 //------------------------------------------------------------------------------
-/**
- * \class SdFat32
- * \brief SD file system class for FAT volumes.
- */
-class SdFat32 : public SdBase<FatVolume, FatFormatter> {
- public:
-};
-//------------------------------------------------------------------------------
-/**
- * \class SdExFat
- * \brief SD file system class for exFAT volumes.
- */
-class SdExFat : public SdBase<ExFatVolume, ExFatFormatter> {
- public:
-};
-//------------------------------------------------------------------------------
-/**
- * \class SdFs
- * \brief SD file system class for FAT16, FAT32, and exFAT volumes.
- */
-class SdFs : public SdBase<FsVolume, FsFormatter> {
- public:
-};
-//------------------------------------------------------------------------------
-#if SDFAT_FILE_TYPE == 1 || defined(DOXYGEN)
-/** Select type for SdFat. */
-typedef SdFat32 SdFat;
-/** Select type for SdBaseFile. */
-typedef FatFile SdBaseFile;
-#elif SDFAT_FILE_TYPE == 2
-typedef SdExFat SdFat;
-typedef ExFatFile SdBaseFile;
-#elif SDFAT_FILE_TYPE == 3
-typedef SdFs SdFat;
-typedef FsBaseFile SdBaseFile;
-#else  // SDFAT_FILE_TYPE
-#error Invalid SDFAT_FILE_TYPE
-#endif  // SDFAT_FILE_TYPE
-//
-// Only define File if FS.h is not included.
-// Line with test for __has_include must not have operators or parentheses.
-#if defined __has_include
-#if __has_include(<FS.h>)
-#define HAS_INCLUDE_FS_H
-#warning File not defined because __has_include(FS.h)
-#endif  // __has_include(<FS.h>)
-#endif  // defined __has_include
-#ifndef HAS_INCLUDE_FS_H
-#if SDFAT_FILE_TYPE == 1 || defined(DOXYGEN)
-/** Select type for File. */
-typedef File32 File;
-#elif SDFAT_FILE_TYPE == 2
-typedef ExFile File;
-#elif SDFAT_FILE_TYPE == 3
-typedef FsFile File;
-#endif  // SDFAT_FILE_TYPE
-#endif  // HAS_INCLUDE_FS_H
 /**
  * \class SdFile
- * \brief FAT16/FAT32 file with Print.
+ * \brief Access FAT16 and FAT32 files on SD and SDHC cards.
  */
-class SdFile : public PrintFile<SdBaseFile> {
+class SdFile : public Print {
  public:
-  SdFile() {}
-  /** Create an open SdFile.
-   * \param[in] path path for file.
-   * \param[in] oflag open flags.
+  /** Create an instance of SdFile. */
+  SdFile(void) : type_(FAT_FILE_TYPE_CLOSED) {}
+  /**
+   * writeError is set to true if an error occurs during a write().
+   * Set writeError to false before calling print() and/or write() and check
+   * for true after calls to print() and/or write().
    */
-  SdFile(const char* path, oflag_t oflag) {
-    open(path, oflag);
+  //bool writeError;
+  /**
+   * Cancel unbuffered reads for this file.
+   * See setUnbufferedRead()
+   */
+  void clearUnbufferedRead(void) {
+    flags_ &= ~F_FILE_UNBUFFERED_READ;
   }
-  /** Set the date/time callback function
+  uint8_t close(void);
+  uint8_t contiguousRange(uint32_t* bgnBlock, uint32_t* endBlock);
+  uint8_t createContiguous(SdFile* dirFile,
+          const char* fileName, uint32_t size);
+  /** \return The current cluster number for a file or directory. */
+  uint32_t curCluster(void) const {return curCluster_;}
+  /** \return The current position for a file or directory. */
+  uint32_t curPosition(void) const {return curPosition_;}
+  /**
+   * Set the date/time callback function
    *
    * \param[in] dateTime The user's call back function.  The callback
    * function is of the form:
@@ -488,11 +172,11 @@ class SdFile : public PrintFile<SdBaseFile> {
    *
    *   // User gets date and time from GPS or real-time clock here
    *
-   *   // return date using FS_DATE macro to format fields
-   *   *date = FS_DATE(year, month, day);
+   *   // return date using FAT_DATE macro to format fields
+   *   *date = FAT_DATE(year, month, day);
    *
-   *   // return time using FS_TIME macro to format fields
-   *   *time = FS_TIME(hour, minute, second);
+   *   // return time using FAT_TIME macro to format fields
+   *   *time = FAT_TIME(hour, minute, second);
    * }
    * \endcode
    *
@@ -501,14 +185,367 @@ class SdFile : public PrintFile<SdBaseFile> {
    * access, creation, and modify, are set when a file is created.
    * sync() maintains the last access date and last modify date/time.
    *
+   * See the timestamp() function.
    */
   static void dateTimeCallback(
     void (*dateTime)(uint16_t* date, uint16_t* time)) {
-    FsDateTime::setCallback(dateTime);
+    dateTime_ = dateTime;
   }
-  /**  Cancel the date/time callback function. */
-  static void dateTimeCallbackCancel() {
-    FsDateTime::clearCallback();
+  /**
+   * Cancel the date/time callback function.
+   */
+  static void dateTimeCallbackCancel(void) {
+    // use explicit zero since NULL is not defined for Sanguino
+    dateTime_ = 0;
+  }
+  /** \return Address of the block that contains this file's directory. */
+  uint32_t dirBlock(void) const {return dirBlock_;}
+  uint8_t dirEntry(dir_t* dir);
+  /** \return Index of this file's directory in the block dirBlock. */
+  uint8_t dirIndex(void) const {return dirIndex_;}
+  static void dirName(const dir_t& dir, char* name);
+  /** \return The total number of bytes in a file or directory. */
+  uint32_t fileSize(void) const {return fileSize_;}
+  /** \return The first cluster number for a file or directory. */
+  uint32_t firstCluster(void) const {return firstCluster_;}
+  /** \return True if this is a SdFile for a directory else false. */
+  uint8_t isDir(void) const {return type_ >= FAT_FILE_TYPE_MIN_DIR;}
+  /** \return True if this is a SdFile for a file else false. */
+  uint8_t isFile(void) const {return type_ == FAT_FILE_TYPE_NORMAL;}
+  /** \return True if this is a SdFile for an open file/directory else false. */
+  uint8_t isOpen(void) const {return type_ != FAT_FILE_TYPE_CLOSED;}
+  /** \return True if this is a SdFile for a subdirectory else false. */
+  uint8_t isSubDir(void) const {return type_ == FAT_FILE_TYPE_SUBDIR;}
+  /** \return True if this is a SdFile for the root directory. */
+  uint8_t isRoot(void) const {
+    return type_ == FAT_FILE_TYPE_ROOT16 || type_ == FAT_FILE_TYPE_ROOT32;
+  }
+  void ls(uint8_t flags = 0, uint8_t indent = 0);
+  uint8_t makeDir(SdFile* dir, const char* dirName);
+  uint8_t open(SdFile* dirFile, uint16_t index, uint8_t oflag);
+  uint8_t open(SdFile* dirFile, const char* fileName, uint8_t oflag);
+
+  uint8_t openRoot(SdVolume* vol);
+  static void printDirName(const dir_t& dir, uint8_t width);
+  static void printFatDate(uint16_t fatDate);
+  static void printFatTime(uint16_t fatTime);
+  static void printTwoDigits(uint8_t v);
+  /**
+   * Read the next byte from a file.
+   *
+   * \return For success read returns the next byte in the file as an int.
+   * If an error occurs or end of file is reached -1 is returned.
+   */
+  int16_t read(void) {
+    uint8_t b;
+    return read(&b, 1) == 1 ? b : -1;
+  }
+  int16_t read(void* buf, uint16_t nbyte);
+  int8_t readDir(dir_t* dir);
+  static uint8_t remove(SdFile* dirFile, const char* fileName);
+  uint8_t remove(void);
+  /** Set the file's current position to zero. */
+  void rewind(void) {
+    curPosition_ = curCluster_ = 0;
+  }
+  uint8_t rmDir(void);
+  uint8_t rmRfStar(void);
+  /** Set the files position to current position + \a pos. See seekSet(). */
+  uint8_t seekCur(uint32_t pos) {
+    return seekSet(curPosition_ + pos);
+  }
+  /**
+   *  Set the files current position to end of file.  Useful to position
+   *  a file for append. See seekSet().
+   */
+  uint8_t seekEnd(void) {return seekSet(fileSize_);}
+  uint8_t seekSet(uint32_t pos);
+  /**
+   * Use unbuffered reads to access this file.  Used with Wave
+   * Shield ISR.  Used with Sd2Card::partialBlockRead() in WaveRP.
+   *
+   * Not recommended for normal applications.
+   */
+  void setUnbufferedRead(void) {
+    if (isFile()) flags_ |= F_FILE_UNBUFFERED_READ;
+  }
+  uint8_t timestamp(uint8_t flag, uint16_t year, uint8_t month, uint8_t day,
+          uint8_t hour, uint8_t minute, uint8_t second);
+  uint8_t sync(void);
+  /** Type of this SdFile.  You should use isFile() or isDir() instead of type()
+   * if possible.
+   *
+   * \return The file or directory type.
+   */
+  uint8_t type(void) const {return type_;}
+  uint8_t truncate(uint32_t size);
+  /** \return Unbuffered read flag. */
+  uint8_t unbufferedRead(void) const {
+    return flags_ & F_FILE_UNBUFFERED_READ;
+  }
+  /** \return SdVolume that contains this file. */
+  SdVolume* volume(void) const {return vol_;}
+  size_t write(uint8_t b);
+  size_t write(const void* buf, uint16_t nbyte);
+  size_t write(const char* str);
+#ifdef __AVR__
+  void write_P(PGM_P str);
+  void writeln_P(PGM_P str);
+#endif
+//------------------------------------------------------------------------------
+#if ALLOW_DEPRECATED_FUNCTIONS
+// Deprecated functions  - suppress cpplint warnings with NOLINT comment
+  /** \deprecated Use:
+   * uint8_t SdFile::contiguousRange(uint32_t* bgnBlock, uint32_t* endBlock);
+   */
+  uint8_t contiguousRange(uint32_t& bgnBlock, uint32_t& endBlock) {  // NOLINT
+    return contiguousRange(&bgnBlock, &endBlock);
+  }
+ /** \deprecated Use:
+   * uint8_t SdFile::createContiguous(SdFile* dirFile,
+   *   const char* fileName, uint32_t size)
+   */
+  uint8_t createContiguous(SdFile& dirFile,  // NOLINT
+    const char* fileName, uint32_t size) {
+    return createContiguous(&dirFile, fileName, size);
+  }
+
+  /**
+   * \deprecated Use:
+   * static void SdFile::dateTimeCallback(
+   *   void (*dateTime)(uint16_t* date, uint16_t* time));
+   */
+  static void dateTimeCallback(
+    void (*dateTime)(uint16_t& date, uint16_t& time)) {  // NOLINT
+    oldDateTime_ = dateTime;
+    dateTime_ = dateTime ? oldToNew : 0;
+  }
+  /** \deprecated Use: uint8_t SdFile::dirEntry(dir_t* dir); */
+  uint8_t dirEntry(dir_t& dir) {return dirEntry(&dir);}  // NOLINT
+  /** \deprecated Use:
+   * uint8_t SdFile::makeDir(SdFile* dir, const char* dirName);
+   */
+  uint8_t makeDir(SdFile& dir, const char* dirName) {  // NOLINT
+    return makeDir(&dir, dirName);
+  }
+  /** \deprecated Use:
+   * uint8_t SdFile::open(SdFile* dirFile, const char* fileName, uint8_t oflag);
+   */
+  uint8_t open(SdFile& dirFile, // NOLINT
+    const char* fileName, uint8_t oflag) {
+    return open(&dirFile, fileName, oflag);
+  }
+  /** \deprecated  Do not use in new apps */
+  uint8_t open(SdFile& dirFile, const char* fileName) {  // NOLINT
+    return open(dirFile, fileName, O_RDWR);
+  }
+  /** \deprecated Use:
+   * uint8_t SdFile::open(SdFile* dirFile, uint16_t index, uint8_t oflag);
+   */
+  uint8_t open(SdFile& dirFile, uint16_t index, uint8_t oflag) {  // NOLINT
+    return open(&dirFile, index, oflag);
+  }
+  /** \deprecated Use: uint8_t SdFile::openRoot(SdVolume* vol); */
+  uint8_t openRoot(SdVolume& vol) {return openRoot(&vol);}  // NOLINT
+
+  /** \deprecated Use: int8_t SdFile::readDir(dir_t* dir); */
+  int8_t readDir(dir_t& dir) {return readDir(&dir);}  // NOLINT
+  /** \deprecated Use:
+   * static uint8_t SdFile::remove(SdFile* dirFile, const char* fileName);
+   */
+  static uint8_t remove(SdFile& dirFile, const char* fileName) {  // NOLINT
+    return remove(&dirFile, fileName);
+  }
+//------------------------------------------------------------------------------
+// rest are private
+ private:
+  static void (*oldDateTime_)(uint16_t& date, uint16_t& time);  // NOLINT
+  static void oldToNew(uint16_t* date, uint16_t* time) {
+    uint16_t d;
+    uint16_t t;
+    oldDateTime_(d, t);
+    *date = d;
+    *time = t;
+  }
+#endif  // ALLOW_DEPRECATED_FUNCTIONS
+ private:
+  // bits defined in flags_
+  // should be 0XF
+  static uint8_t const F_OFLAG = (O_ACCMODE | O_APPEND | O_SYNC);
+  // available bits
+  static uint8_t const F_UNUSED = 0X30;
+  // use unbuffered SD read
+  static uint8_t const F_FILE_UNBUFFERED_READ = 0X40;
+  // sync of directory entry required
+  static uint8_t const F_FILE_DIR_DIRTY = 0X80;
+
+// make sure F_OFLAG is ok
+#if ((F_UNUSED | F_FILE_UNBUFFERED_READ | F_FILE_DIR_DIRTY) & F_OFLAG)
+#error flags_ bits conflict
+#endif  // flags_ bits
+
+  // private data
+  uint8_t   flags_;         // See above for definition of flags_ bits
+  uint8_t   type_;          // type of file see above for values
+  uint32_t  curCluster_;    // cluster for current file position
+  uint32_t  curPosition_;   // current file position in bytes from beginning
+  uint32_t  dirBlock_;      // SD block that contains directory entry for file
+  uint8_t   dirIndex_;      // index of entry in dirBlock 0 <= dirIndex_ <= 0XF
+  uint32_t  fileSize_;      // file size in bytes
+  uint32_t  firstCluster_;  // first cluster of file
+  SdVolume* vol_;           // volume where file is located
+
+  // private functions
+  uint8_t addCluster(void);
+  uint8_t addDirCluster(void);
+  dir_t* cacheDirEntry(uint8_t action);
+  static void (*dateTime_)(uint16_t* date, uint16_t* time);
+  static uint8_t make83Name(const char* str, uint8_t* name);
+  uint8_t openCachedEntry(uint8_t cacheIndex, uint8_t oflags);
+  dir_t* readDirCache(void);
+};
+//==============================================================================
+// SdVolume class
+/**
+ * \brief Cache for an SD data block
+ */
+union cache_t {
+           /** Used to access cached file data blocks. */
+  uint8_t  data[512];
+           /** Used to access cached FAT16 entries. */
+  uint16_t fat16[256];
+           /** Used to access cached FAT32 entries. */
+  uint32_t fat32[128];
+           /** Used to access cached directory entries. */
+  dir_t    dir[16];
+           /** Used to access a cached MasterBoot Record. */
+  mbr_t    mbr;
+           /** Used to access to a cached FAT boot sector. */
+  fbs_t    fbs;
+};
+//------------------------------------------------------------------------------
+/**
+ * \class SdVolume
+ * \brief Access FAT16 and FAT32 volumes on SD and SDHC cards.
+ */
+class SdVolume {
+ public:
+  /** Create an instance of SdVolume */
+  SdVolume(void) :allocSearchStart_(2), fatType_(0) {}
+  /** Clear the cache and returns a pointer to the cache.  Used by the WaveRP
+   *  recorder to do raw write to the SD card.  Not for normal apps.
+   */
+  static uint8_t* cacheClear(void) {
+    cacheFlush();
+    cacheBlockNumber_ = 0XFFFFFFFF;
+    return cacheBuffer_.data;
+  }
+  /**
+   * Initialize a FAT volume.  Try partition one first then try super
+   * floppy format.
+   *
+   * \param[in] dev The Sd2Card where the volume is located.
+   *
+   * \return The value one, true, is returned for success and
+   * the value zero, false, is returned for failure.  Reasons for
+   * failure include not finding a valid partition, not finding a valid
+   * FAT file system or an I/O error.
+   */
+  uint8_t init(Sd2Card* dev) { return init(dev, 1) ? true : init(dev, 0);}
+  uint8_t init(Sd2Card* dev, uint8_t part);
+
+  // inline functions that return volume info
+  /** \return The volume's cluster size in blocks. */
+  uint8_t blocksPerCluster(void) const {return blocksPerCluster_;}
+  /** \return The number of blocks in one FAT. */
+  uint32_t blocksPerFat(void)  const {return blocksPerFat_;}
+  /** \return The total number of clusters in the volume. */
+  uint32_t clusterCount(void) const {return clusterCount_;}
+  /** \return The shift count required to multiply by blocksPerCluster. */
+  uint8_t clusterSizeShift(void) const {return clusterSizeShift_;}
+  /** \return The logical block number for the start of file data. */
+  uint32_t dataStartBlock(void) const {return dataStartBlock_;}
+  /** \return The number of FAT structures on the volume. */
+  uint8_t fatCount(void) const {return fatCount_;}
+  /** \return The logical block number for the start of the first FAT. */
+  uint32_t fatStartBlock(void) const {return fatStartBlock_;}
+  /** \return The FAT type of the volume. Values are 12, 16 or 32. */
+  uint8_t fatType(void) const {return fatType_;}
+  /** \return The number of entries in the root directory for FAT16 volumes. */
+  uint32_t rootDirEntryCount(void) const {return rootDirEntryCount_;}
+  /** \return The logical block number for the start of the root directory
+       on FAT16 volumes or the first cluster number on FAT32 volumes. */
+  uint32_t rootDirStart(void) const {return rootDirStart_;}
+  /** return a pointer to the Sd2Card object for this volume */
+  static Sd2Card* sdCard(void) {return sdCard_;}
+//------------------------------------------------------------------------------
+#if ALLOW_DEPRECATED_FUNCTIONS
+  // Deprecated functions  - suppress cpplint warnings with NOLINT comment
+  /** \deprecated Use: uint8_t SdVolume::init(Sd2Card* dev); */
+  uint8_t init(Sd2Card& dev) {return init(&dev);}  // NOLINT
+
+  /** \deprecated Use: uint8_t SdVolume::init(Sd2Card* dev, uint8_t vol); */
+  uint8_t init(Sd2Card& dev, uint8_t part) {  // NOLINT
+    return init(&dev, part);
+  }
+#endif  // ALLOW_DEPRECATED_FUNCTIONS
+//------------------------------------------------------------------------------
+  private:
+  // Allow SdFile access to SdVolume private data.
+  friend class SdFile;
+
+  // value for action argument in cacheRawBlock to indicate read from cache
+  static uint8_t const CACHE_FOR_READ = 0;
+  // value for action argument in cacheRawBlock to indicate cache dirty
+  static uint8_t const CACHE_FOR_WRITE = 1;
+
+  static cache_t cacheBuffer_;        // 512 byte cache for device blocks
+  static uint32_t cacheBlockNumber_;  // Logical number of block in the cache
+  static Sd2Card* sdCard_;            // Sd2Card object for cache
+  static uint8_t cacheDirty_;         // cacheFlush() will write block if true
+  static uint32_t cacheMirrorBlock_;  // block number for mirror FAT
+//
+  uint32_t allocSearchStart_;   // start cluster for alloc search
+  uint8_t blocksPerCluster_;    // cluster size in blocks
+  uint32_t blocksPerFat_;       // FAT size in blocks
+  uint32_t clusterCount_;       // clusters in one FAT
+  uint8_t clusterSizeShift_;    // shift to convert cluster count to block count
+  uint32_t dataStartBlock_;     // first data block number
+  uint8_t fatCount_;            // number of FATs on volume
+  uint32_t fatStartBlock_;      // start block for first FAT
+  uint8_t fatType_;             // volume type (12, 16, OR 32)
+  uint16_t rootDirEntryCount_;  // number of entries in FAT16 root dir
+  uint32_t rootDirStart_;       // root start block for FAT16, cluster for FAT32
+  //----------------------------------------------------------------------------
+  uint8_t allocContiguous(uint32_t count, uint32_t* curCluster);
+  uint8_t blockOfCluster(uint32_t position) const {
+          return (position >> 9) & (blocksPerCluster_ - 1);}
+  uint32_t clusterStartBlock(uint32_t cluster) const {
+           return dataStartBlock_ + ((cluster - 2) << clusterSizeShift_);}
+  uint32_t blockNumber(uint32_t cluster, uint32_t position) const {
+           return clusterStartBlock(cluster) + blockOfCluster(position);}
+  static uint8_t cacheFlush(void);
+  static uint8_t cacheRawBlock(uint32_t blockNumber, uint8_t action);
+  static void cacheSetDirty(void) {cacheDirty_ |= CACHE_FOR_WRITE;}
+  static uint8_t cacheZeroBlock(uint32_t blockNumber);
+  uint8_t chainSize(uint32_t beginCluster, uint32_t* size) const;
+  uint8_t fatGet(uint32_t cluster, uint32_t* value) const;
+  uint8_t fatPut(uint32_t cluster, uint32_t value);
+  uint8_t fatPutEOC(uint32_t cluster) {
+    return fatPut(cluster, 0x0FFFFFFF);
+  }
+  uint8_t freeChain(uint32_t cluster);
+  uint8_t isEOC(uint32_t cluster) const {
+    return  cluster >= (fatType_ == 16 ? FAT16EOC_MIN : FAT32EOC_MIN);
+  }
+  uint8_t readBlock(uint32_t block, uint8_t* dst) {
+    return sdCard_->readBlock(block, dst);}
+  uint8_t readData(uint32_t block, uint16_t offset,
+    uint16_t count, uint8_t* dst) {
+      return sdCard_->readData(block, offset, count, dst);
+  }
+  uint8_t writeBlock(uint32_t block, const uint8_t* dst) {
+    return sdCard_->writeBlock(block, dst);
   }
 };
 #endif  // SdFat_h
