@@ -134,6 +134,6 @@ void I2CDriverWire::on_receive_wrapper(size_t num_bytes, uint16_t address) {
     }
 }
 
-I2CDriverWire Wire(Master, Slave);
-I2CDriverWire Wire1(Master1, Slave1);
-I2CDriverWire Wire2(Master2, Slave2);
+I2CDriverWire I2C_Wire(Master, Slave);
+I2CDriverWire I2C_Wire1(Master1, Slave1);
+I2CDriverWire I2C_Wire2(Master2, Slave2);
