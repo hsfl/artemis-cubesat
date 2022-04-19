@@ -1,3 +1,5 @@
+// Barometric Pressure and Altimeter readings from Adafruit BMP388
+
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_Sensor.h>
