@@ -1,3 +1,4 @@
+// Temperature, Humidty, Pressure, and Gas readings from Adafruit Sensor BME688
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_Sensor.h>
