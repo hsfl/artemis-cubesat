@@ -10,6 +10,7 @@
 #define BMP_MOSI 11
 #define BMP_CS 10
 
+// To accurately calculate altitude chnage this value to the hPa pressure at sea level for your location and day!
 #define SEALEVELPRESSURE_HPA (1013.25)
 
 Adafruit_BMP3XX bmp;
