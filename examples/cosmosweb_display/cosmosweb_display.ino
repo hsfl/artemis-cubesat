@@ -8,8 +8,10 @@
 // Connect to the GPS on the hardware port
 Adafruit_GPS GPS(&GPSSerial);
 //----------------------------------------------------------------------------------------------------------------------
-// Temperature
-int sensorPin = A0; //the analog pin the TMP36 is connected to
+// Temperature Sensors
+#define TEMPS_COUNT 7 // The total number of temperature sensors
+// Analog Pin temperature sensors are connected to
+const int TEMPS[TEMPS_COUNT] = { A0, A1, A6, A7, A8, A9, A17 };
 //----------------------------------------------------------------------------------------------------------------------
 // Magnetometer
 #include <Wire.h>
@@ -17,25 +19,20 @@ int sensorPin = A0; //the analog pin the TMP36 is connected to
 #include <Adafruit_Sensor.h>
 Adafruit_LIS3MDL lis3mdl;
 //----------------------------------------------------------------------------------------------------------------------
-// Accelerometer
-#include <Adafruit_LSM6DS33.h>
-Adafruit_LSM6DS33 lsm6ds33;
+// Accelerometer & Gyroscope
+#include <Adafruit_LSM6DSOX.h>
+Adafruit_LSM6DSOX sox;
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t timer = 0;
 //----------------------------------------------------------------------------------------------------------------------
-// SD CARD
-#include <SD.h>
 #include <SPI.h>
-File myFile;
-const int chipSelect = BUILTIN_SDCARD;
 //----------------------------------------------------------------------------------------------------------------------
 // JSON string library
 #include <ArduinoJson.h>
 //----------------------------------------------------------------------------------------------------------------------
-
 #include <NativeEthernet.h>
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-IPAddress remoteIp(192, 168, 1, 161);  // <- EDIT!!!!
+IPAddress remoteIp(192, 168, 1, 161);  // Edit to your own IP address
 unsigned short remotePort = 10091;
 unsigned short localPort = 10091;
 EthernetUDP udp;
@@ -44,12 +41,11 @@ void setup()
 {
   // Give time for the Teensy to boot
   delay(1000);
-
   Serial.begin(115200);
 
   // Initialize Ethernet libary
   if (!Ethernet.begin(mac)) {
-    Serial.println(F("Failed to initialize Ethernet library"));
+    Serial.println(F("Ethernet connection not established"));
   }
   // Enable UDP
   udp.begin(localPort);
@@ -65,40 +61,26 @@ void setup()
   // For the parsing code to work nicely and have time to sort thru the data, and
   // print it out we don't suggest using anything higher than 1 Hz
 
+  // Magnetometer
   lis3mdl.begin_I2C(); // hardware I2C mode, can pass in address & alt Wire
   lis3mdl.setIntThreshold(500);
   lis3mdl.configInterrupt(false, false, true, // enable z axis
                           true, // polarity
                           false, // don't latch
                           true); // enabled!
-
-  lsm6ds33.begin_I2C();
-
-  // SD CARD
-
-  // see if the card is present and can be initialized:
-  if (!SD.begin(chipSelect)) {
-    while (1) { // No SD card, so don't do anything more - stay stuck here
-    }
-  }
+  // Accelerometer & Gyroscope
+  sox.begin_I2C();
 
   timer = millis();
 }
 //----------------------------------------------------------------------------------------------------------------------
 void loop() // run over and over again
 {
-  // Helpful link: https://arduino.stackexchange.com/questions/72637/i-am-having-strange-issues-when-trying-to-read-form-gps-serial-connection
-
-
-  // This is ALWAYS needed in order to pump new messages. Even if you do not want the messages you still
-  // need to loop GPS.read() over & over until it fails every loop() call.
   if (GPS.available())
   {
     while (GPS.read()) {};
   }
-
-
-  // Parse any newly received NMEA sentence. Make sure to parse all mmessages even if you do not want to print them!
+  // Parse any newly received NMEA sentence.
   if (GPS.newNMEAreceived()) // Check to see if a new NMEA line has been received
   {
     if (GPS.parse(GPS.lastNMEA())) // A successful message was parsed
@@ -111,7 +93,6 @@ void loop() // run over and over again
       }
     }
   }
-
 
   // approximately every 2 seconds or so, print out the current stats
   if ((millis() - timer) >= DELAY_TIME)
@@ -169,14 +150,24 @@ void loop() // run over and over again
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
     }
 
-    // Temperature
+    // Temperature Sensors
 
-    const int reading = analogRead(sensorPin); // getting the voltage reading from the temperature sensor
-    const float voltage = (reading * 3.3) / 1024; // converting that reading to voltage
-    Serial.print("OBC Board Temperature\t");
-    Serial.print(voltage); Serial.print(" volts\t");
-    float temperatureF = (voltage * 1000) - 58; // now print out the temperature
-    Serial.print(temperatureF); Serial.println(" °F\t");
+    float voltage[TEMPS_COUNT] = { 0 }, temperatureF[TEMPS_COUNT] = { 0 };
+
+    for (int i = 0; i < TEMPS_COUNT; i++)
+    {
+      const int reading = analogRead(TEMPS[i]); // getting the voltage reading from the temperature sensor
+
+      voltage[i] = reading * (3.3 / 1024); // converting that reading to voltage
+
+      const float temperatureC = (voltage[i] - 0.5) * 100 ;
+
+      temperatureF[i] = (temperatureC * 9.0 / 5.0) + 32.0; // convert the voltage to a temperature
+
+      char buf[64];
+      sprintf(buf, "Temperature %d: %.2f volts %.2f °F\t", i, voltage[i], temperatureF[i]);
+      Serial.print(buf);
+    }
 
     // Magnetometer
 
@@ -199,7 +190,7 @@ void loop() // run over and over again
     sensors_event_t accel;
     sensors_event_t gyro;
     sensors_event_t temp;
-    lsm6ds33.getEvent(&accel, &gyro, &temp);
+    sox.getEvent(&accel, &gyro, &temp);
 
     Serial.print("IMU Temperature ");
     Serial.print(temp.temperature);
@@ -213,7 +204,7 @@ void loop() // run over and over again
     Serial.print(accel.acceleration.y);
     Serial.print(" \tZ: ");
     Serial.print(accel.acceleration.z);
-    Serial.println(" m/s² ");
+    Serial.println(" m/s.² ");
 
     /* Display the results (rotation is measured in rad/s) */
     Serial.print("Gyroscope\tX: ");
@@ -225,62 +216,82 @@ void loop() // run over and over again
     Serial.println(" radians/s ");
     Serial.println();
 
-    // open the file.
-    myFile = SD.open("flightdata.txt", FILE_WRITE);
+    // UDP Doc
 
-    // if the file opened okay, write to it:
-    if (myFile) {
-      StaticJsonDocument<512> doc;  // Increase this value if values are missing in the JSON document
-      // To compute the appropriate capacity, go to https://arduinojson.org/v6/assistant/
+    StaticJsonDocument<512> doc;  // Increase this value if values are missing in the JSON document
+    // To compute the appropriate capacity, go to https://arduinojson.org/v6/assistant/
 
-      doc["time"] = millis();
-      doc["node_name"] = "artemis";
+    doc["time"] = millis();
+    doc["node_name"] = "artemis";
 
-      JsonObject gps = doc.createNestedObject("gps");
-      gps["long"] = GPS.longitude;
-      gps["lat"] = GPS.latitude;
-      gps["altitude"] = GPS.altitude;
-      gps["quality"] = GPS.fixquality;
-      gps["speed"] = GPS.speed;
-      gps["angle"] = GPS.angle;
-      gps["satellites"] = GPS.satellites;
+    JsonObject gps = doc.createNestedObject("gps");
+    gps["long"] = GPS.longitude;
+    gps["lat"] = GPS.latitude;
+    gps["altitude"] = GPS.altitude;
+    gps["quality"] = GPS.fixquality;
+    gps["speed"] = GPS.speed;
+    gps["angle"] = GPS.angle;
+    gps["satellites"] = GPS.satellites;
 
-      char timestr[32];
-      sprintf(timestr, "%04d-%02d-%02dT%02d:%02d:%02d.%dZ", GPS.year, GPS.month, GPS.day, GPS.hour, GPS.minute, GPS.seconds, GPS.milliseconds);
-      gps["time"] = timestr;
+    char timestr[32];
+    sprintf(timestr, "%04d-%02d-%02dT%02d:%02d:%02d.%dZ", GPS.year, GPS.month, GPS.day, GPS.hour, GPS.minute, GPS.seconds, GPS.milliseconds);
+    gps["time"] = timestr;
 
-      JsonObject imu = doc.createNestedObject("imu");
-      imu["temp"] = temp.temperature;
+    JsonObject imu = doc.createNestedObject("imu");
+    imu["temp"] = temp.temperature;
 
-      JsonArray imu_accel = imu.createNestedArray("accel");
-      imu_accel.add(accel.acceleration.x);
-      imu_accel.add(accel.acceleration.y);
-      imu_accel.add(accel.acceleration.z);
+    JsonArray imu_accel = imu.createNestedArray("accel");
+    imu_accel.add(accel.acceleration.x);
+    imu_accel.add(accel.acceleration.y);
+    imu_accel.add(accel.acceleration.z);
 
-      JsonArray imu_gyro = imu.createNestedArray("gyro");
-      imu_gyro.add(gyro.gyro.x);
-      imu_gyro.add(gyro.gyro.y);
-      imu_gyro.add(gyro.gyro.z);
+    JsonArray imu_gyro = imu.createNestedArray("gyro");
+    imu_gyro.add(gyro.gyro.x);
+    imu_gyro.add(gyro.gyro.y);
+    imu_gyro.add(gyro.gyro.z);
 
-      JsonArray imu_magn = imu.createNestedArray("magn");
-      imu_magn.add(event.magnetic.x);
-      imu_magn.add(event.magnetic.y);
-      imu_magn.add(event.magnetic.z);
+    JsonArray imu_magn = imu.createNestedArray("magn");
+    imu_magn.add(event.magnetic.x);
+    imu_magn.add(event.magnetic.y);
+    imu_magn.add(event.magnetic.z);
 
-      JsonObject jtemp = doc.createNestedObject("obc temp");
-      jtemp["volts"] = voltage;
-      jtemp["farenheit"] = temperatureF;
 
-      //serializeJsonPretty(doc, Serial); //uncomment this if you want to see the json strings in the serial monitor
-      serializeJson(doc, myFile);
-      myFile.println();  // ensures JSON documents are line-delimited
-      myFile.close();
+    // Add temperatures from the array to the JSON object
 
-      // Send UDP packet
-      udp.beginPacket(remoteIp, remotePort);
-      serializeJson(doc, udp);
-      udp.println();
-      udp.endPacket();
-    }
+    JsonObject jtemp0 = doc.createNestedObject("obc temp");
+    jtemp0["volts"] = voltage[0];
+    jtemp0["farenheit"] = temperatureF[0];
+
+    JsonObject jtemp1 = doc.createNestedObject("pdu temp");
+    jtemp1["volts"] = voltage[1];
+    jtemp1["farenheit"] = temperatureF[1];
+
+    JsonObject jtemp7 = doc.createNestedObject("battery board temp");
+    jtemp7["volts"] = voltage[7];
+    jtemp7["farenheit"] = temperatureF[7];
+
+    JsonObject jtemp6 = doc.createNestedObject("solar panel 1 temp");
+    jtemp6["volts"] = voltage[6];
+    jtemp6["farenheit"] = temperatureF[6];
+
+    JsonObject jtemp8 = doc.createNestedObject("solar panel 2 temp");
+    jtemp8["volts"] = voltage[8];
+    jtemp8["farenheit"] = temperatureF[8];
+
+    JsonObject jtemp9 = doc.createNestedObject("solar panel 3 temp");
+    jtemp9["volts"] = voltage[9];
+    jtemp9["farenheit"] = temperatureF[9];
+
+    JsonObject jtemp17 = doc.createNestedObject("solar panel 4 temp");
+    jtemp17["volts"] = voltage[17];
+    jtemp17["farenheit"] = temperatureF[17];
+
+    //serializeJsonPretty(doc, Serial); //uncomment this if you want to see the json strings in the serial monitor
+
+    // Send UDP packet
+    udp.beginPacket(remoteIp, remotePort);
+    serializeJson(doc, udp);
+    udp.println();
+    udp.endPacket();
   }
 }
