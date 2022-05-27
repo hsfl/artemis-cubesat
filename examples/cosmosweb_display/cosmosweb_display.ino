@@ -152,7 +152,7 @@ void loop() // run over and over again
 
     // Temperature Sensors
 
-    float voltage[TEMPS_COUNT] = { 0 }, temperatureF[TEMPS_COUNT] = { 0 };
+    float voltage[TEMPS_COUNT] = { 0 }, temperatureC[TEMPS_COUNT] = { 0 };
 
     for (int i = 0; i < TEMPS_COUNT; i++)
     {
@@ -160,12 +160,12 @@ void loop() // run over and over again
 
       voltage[i] = reading * (3.3 / 1024); // converting that reading to voltage
 
-      const float temperatureC = (voltage[i] - 0.5) * 100 ;
+      const float temperatureF = (voltage[i] * 1000) -58 ;
 
-      temperatureF[i] = (temperatureC * 9.0 / 5.0) + 32.0; // convert the voltage to a temperature
+      temperatureC[i] = (temperatureF - 32) / 1.8; // convert from fahrenheit to celsius 
 
       char buf[64];
-      sprintf(buf, "Temperature %d: %.2f volts %.2f °F\t", i, voltage[i], temperatureF[i]);
+      sprintf(buf, "Temperature %d: %.2f volts %.2f °C", i, voltage[i], temperatureC[i]);
       Serial.print(buf);
     }
 
@@ -260,31 +260,31 @@ void loop() // run over and over again
 
     JsonObject jtemp0 = doc.createNestedObject("obc temp");
     jtemp0["volts"] = voltage[0];
-    jtemp0["farenheit"] = temperatureF[0];
+    jtemp0["celsius"] = temperatureC[0];
 
     JsonObject jtemp1 = doc.createNestedObject("pdu temp");
     jtemp1["volts"] = voltage[1];
-    jtemp1["farenheit"] = temperatureF[1];
+    jtemp1["celsius"] = temperatureC[1];
 
     JsonObject jtemp7 = doc.createNestedObject("battery board temp");
     jtemp7["volts"] = voltage[7];
-    jtemp7["farenheit"] = temperatureF[7];
+    jtemp7["celsius"] = temperatureC[7];
 
     JsonObject jtemp6 = doc.createNestedObject("solar panel 1 temp");
     jtemp6["volts"] = voltage[6];
-    jtemp6["farenheit"] = temperatureF[6];
+    jtemp6["celsius"] = temperatureC[6];
 
     JsonObject jtemp8 = doc.createNestedObject("solar panel 2 temp");
     jtemp8["volts"] = voltage[8];
-    jtemp8["farenheit"] = temperatureF[8];
+    jtemp8["celsius"] = temperatureC[8];
 
     JsonObject jtemp9 = doc.createNestedObject("solar panel 3 temp");
     jtemp9["volts"] = voltage[9];
-    jtemp9["farenheit"] = temperatureF[9];
+    jtemp9["celsius"] = temperatureC[9];
 
     JsonObject jtemp17 = doc.createNestedObject("solar panel 4 temp");
     jtemp17["volts"] = voltage[17];
-    jtemp17["farenheit"] = temperatureF[17];
+    jtemp17["celsius"] = temperatureC[17];
 
     //serializeJsonPretty(doc, Serial); //uncomment this if you want to see the json strings in the serial monitor
 
