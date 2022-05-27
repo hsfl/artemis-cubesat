@@ -2,7 +2,6 @@
 
 #define aref_voltage 3.3         
  
- 
 //TMP36 Pin Variables
 int tempPin = A0;        //the analog pin the TMP36's Vout (sense) pin is connected to
                         //the resolution is 10 mV / degree centigrade with a
