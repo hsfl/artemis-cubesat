@@ -45,7 +45,7 @@ void setup()
 
   // Initialize Ethernet libary
   if (!Ethernet.begin(mac)) {
-    Serial.println(F("Ethernet connection not established"));
+    Serial.println(F("Ethernet connection not established")); // Print message if ethernet setup fails
   }
   // Enable UDP
   udp.begin(localPort);
@@ -160,9 +160,9 @@ void loop() // run over and over again
 
       voltage[i] = reading * (3.3 / 1024); // converting that reading to voltage
 
-      const float temperatureF = (voltage[i] * 1000) -58 ;
+      const float temperatureF = (voltage[i] * 1000) - 58 ;
 
-      temperatureC[i] = (temperatureF - 32) / 1.8; // convert from fahrenheit to celsius 
+      temperatureC[i] = (temperatureF - 32) / 1.8; // convert from fahrenheit to celsius
 
       char buf[64];
       sprintf(buf, "Temperature %d: %.2f volts %.2f °C", i, voltage[i], temperatureC[i]);
