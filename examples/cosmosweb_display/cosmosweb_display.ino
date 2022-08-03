@@ -23,6 +23,14 @@ Adafruit_LIS3MDL lis3mdl;
 #include <Adafruit_LSM6DSOX.h>
 Adafruit_LSM6DSOX sox;
 //----------------------------------------------------------------------------------------------------------------------
+// Current Sensors
+#include <Adafruit_INA219.h>
+Adafruit_INA219 ina219_1(0x40); // Solar 1
+Adafruit_INA219 ina219_2(0x41); // Solar 2
+Adafruit_INA219 ina219_3(0x42); // Solar 3
+Adafruit_INA219 ina219_4(0x43); // Solar 4
+Adafruit_INA219 ina219_5(0x44); // Battery
+//----------------------------------------------------------------------------------------------------------------------
 uint32_t timer = 0;
 //----------------------------------------------------------------------------------------------------------------------
 #include <SPI.h>
@@ -32,7 +40,7 @@ uint32_t timer = 0;
 //----------------------------------------------------------------------------------------------------------------------
 #include <NativeEthernet.h>
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-IPAddress remoteIp(192, 168, 1, 161);  // Edit to your own IP address
+IPAddress remoteIp(000, 000, 000, 000);  // Edit this to your own IP address
 unsigned short remotePort = 10091;
 unsigned short localPort = 10091;
 EthernetUDP udp;
@@ -42,6 +50,17 @@ void setup()
   // Give time for the Teensy to boot
   delay(1000);
   Serial.begin(115200);
+
+  while (!Serial)
+  {
+    delay(1); // will pause Zero, Leonardo, etc until serial console opens
+  }
+
+  ina219_1.begin(&Wire2);
+  ina219_2.begin(&Wire2);
+  ina219_3.begin(&Wire2);
+  ina219_4.begin(&Wire2);
+  ina219_5.begin(&Wire2);
 
   // Initialize Ethernet libary
   if (!Ethernet.begin(mac)) {
@@ -150,6 +169,8 @@ void loop() // run over and over again
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
     }
 
+    Serial.println();
+
     // Temperature Sensors
 
     float voltage[TEMPS_COUNT] = { 0 }, temperatureC[TEMPS_COUNT] = { 0 };
@@ -164,10 +185,10 @@ void loop() // run over and over again
 
       temperatureC[i] = (temperatureF - 32) / 1.8; // convert from fahrenheit to celsius
 
-      char buf[64];
-      sprintf(buf, "Temperature %d: %.2f volts %.2f °C", i, voltage[i], temperatureC[i]);
-      Serial.print(buf);
+      Serial.printf("Temperature %d: %.2f volts %.2f°C\n", i, voltage[i], temperatureC[i]);
     }
+
+    Serial.println();
 
     // Magnetometer
 
@@ -216,6 +237,21 @@ void loop() // run over and over again
     Serial.println(" radians/s ");
     Serial.println();
 
+    // Print out 4 Solar and 1 Battery stats below
+
+    Adafruit_INA219 * p[5] = { &ina219_1, &ina219_2, &ina219_3, &ina219_4, &ina219_5 };
+
+    //Sensor 1:  current, power, bus
+
+    for (int i = 0; i < 5; i++)
+    {
+      const char *labels[5] = { "Solar Panel 1", "Solar Panel 2", "Solar Panel 3", "Solar Panel 4", "Battery Board" };
+
+      Serial.printf("%s: Bus Voltage %.3f V Current %.1f mA Power %.0f mW\n", labels[i], p[i]->getBusVoltage_V(), p[i]->getCurrent_mA(), p[i]->getPower_mW());
+    }
+    {
+      Serial.println();
+    }
     // UDP Doc
 
     StaticJsonDocument<512> doc;  // Increase this value if values are missing in the JSON document
@@ -233,7 +269,7 @@ void loop() // run over and over again
     gps["angle"] = GPS.angle;
     gps["satellites"] = GPS.satellites;
 
-    char timestr[32];
+    char timestr[64];
     sprintf(timestr, "%04d-%02d-%02dT%02d:%02d:%02d.%dZ", GPS.year, GPS.month, GPS.day, GPS.hour, GPS.minute, GPS.seconds, GPS.milliseconds);
     gps["time"] = timestr;
 
@@ -255,36 +291,28 @@ void loop() // run over and over again
     imu_magn.add(event.magnetic.y);
     imu_magn.add(event.magnetic.z);
 
-
     // Add temperatures from the array to the JSON object
 
-    JsonObject jtemp0 = doc.createNestedObject("obc temp");
-    jtemp0["volts"] = voltage[0];
-    jtemp0["celsius"] = temperatureC[0];
+    for (int i = 0; i < 7; i++)
+    {
+      const char *json_labels[7] = { "obc temp", "pdu temp", "battery board temp", "solar panel 1 temp", "solar panel 2 temp", "solar panel 3 temp", "solar panel 4 temp" };
 
-    JsonObject jtemp1 = doc.createNestedObject("pdu temp");
-    jtemp1["volts"] = voltage[1];
-    jtemp1["celsius"] = temperatureC[1];
+      JsonObject temp = doc.createNestedObject(json_labels[i]);
+      temp["volts"] = voltage[i];
+      temp["celsius"] = temperatureC[i];
+    }
 
-    JsonObject jtemp7 = doc.createNestedObject("battery board temp");
-    jtemp7["volts"] = voltage[7];
-    jtemp7["celsius"] = temperatureC[7];
+    // Add to the JSON the 4 solar panels and 1 Battery stats
 
-    JsonObject jtemp6 = doc.createNestedObject("solar panel 1 temp");
-    jtemp6["volts"] = voltage[6];
-    jtemp6["celsius"] = temperatureC[6];
+    for (int i = 0; i < 5; i++)
+    {
+      const char *json_labels[5] = { "solar panel 1", "solar panel 2", "solar panel 3", "solar panel 4", "battery 1" };
 
-    JsonObject jtemp8 = doc.createNestedObject("solar panel 2 temp");
-    jtemp8["volts"] = voltage[8];
-    jtemp8["celsius"] = temperatureC[8];
-
-    JsonObject jtemp9 = doc.createNestedObject("solar panel 3 temp");
-    jtemp9["volts"] = voltage[9];
-    jtemp9["celsius"] = temperatureC[9];
-
-    JsonObject jtemp17 = doc.createNestedObject("solar panel 4 temp");
-    jtemp17["volts"] = voltage[17];
-    jtemp17["celsius"] = temperatureC[17];
+      JsonObject temp = doc.createNestedObject(json_labels[i]);
+      temp["vol"] = p[i]->getBusVoltage_V();
+      temp["cur"] = p[i]->getCurrent_mA();
+      temp["wat"] = p[i]->getPower_mW();
+    }
 
     //serializeJsonPretty(doc, Serial); //uncomment this if you want to see the json strings in the serial monitor
 
