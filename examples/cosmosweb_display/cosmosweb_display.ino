@@ -254,7 +254,7 @@ void loop() // run over and over again
     }
     // UDP Doc
 
-    StaticJsonDocument<512> doc;  // Increase this value if values are missing in the JSON document
+    StaticJsonDocument<1100> doc;  // Increase this value if values are missing in the JSON document
     // To compute the appropriate capacity, go to https://arduinojson.org/v6/assistant/
 
     doc["time"] = millis();
