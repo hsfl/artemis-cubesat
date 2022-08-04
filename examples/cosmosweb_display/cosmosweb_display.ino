@@ -41,8 +41,8 @@ uint32_t timer = 0;
 #include <NativeEthernet.h>
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 IPAddress remoteIp(000, 000, 000, 000);  // Edit this to your own IP address
-unsigned short remotePort = 10091;
-unsigned short localPort = 10091;
+unsigned short remotePort = 10096;
+unsigned short localPort = 10096;
 EthernetUDP udp;
 
 void setup()
