@@ -12,6 +12,7 @@ Adafruit_GPS GPS(&GPSSerial);
 #define TEMPS_COUNT 7 // The total number of temperature sensors
 // Analog Pin temperature sensors are connected to
 const int TEMPS[TEMPS_COUNT] = { A0, A1, A6, A7, A8, A9, A17 };
+const char *temp_sen_names[TEMPS_COUNT] = { "obc_temp", "pdu_temp", "battery_board_temp", "solar_panel_1_temp", "solar_panel_2_temp", "solar_panel_3_temp", "solar_panel_4_temp" };
 //----------------------------------------------------------------------------------------------------------------------
 // Magnetometer
 #include <Wire.h>
@@ -30,6 +31,8 @@ Adafruit_INA219 ina219_2(0x41); // Solar 2
 Adafruit_INA219 ina219_3(0x42); // Solar 3
 Adafruit_INA219 ina219_4(0x43); // Solar 4
 Adafruit_INA219 ina219_5(0x44); // Battery
+#define CURRENT_COUNT 5
+const char *current_sen_names[CURRENT_COUNT] = { "solar_panel_1", "solar_panel_2", "solar_panel_3", "solar_panel_4", "battery_board" };
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t timer = 0;
 //----------------------------------------------------------------------------------------------------------------------
@@ -40,7 +43,7 @@ uint32_t timer = 0;
 //----------------------------------------------------------------------------------------------------------------------
 #include <NativeEthernet.h>
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-IPAddress remoteIp(000, 000, 000, 000);  // Edit this to your own IP address
+IPAddress remoteIp(000, 0000, 000, 000);  // Edit this to your own IP address
 unsigned short remotePort = 10096;
 unsigned short localPort = 10096;
 EthernetUDP udp;
@@ -239,15 +242,13 @@ void loop() // run over and over again
 
     // Print out 4 Solar and 1 Battery stats below
 
-    Adafruit_INA219 * p[5] = { &ina219_1, &ina219_2, &ina219_3, &ina219_4, &ina219_5 };
+    Adafruit_INA219 * p[CURRENT_COUNT] = { &ina219_1, &ina219_2, &ina219_3, &ina219_4, &ina219_5 };
 
     //Sensor 1:  current, power, bus
 
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < CURRENT_COUNT; i++)
     {
-      const char *labels[5] = { "Solar Panel 1", "Solar Panel 2", "Solar Panel 3", "Solar Panel 4", "Battery Board" };
-
-      Serial.printf("%s: Bus Voltage %.3f V Current %.1f mA Power %.0f mW\n", labels[i], p[i]->getBusVoltage_V(), p[i]->getCurrent_mA(), p[i]->getPower_mW());
+      Serial.printf("%s: Bus Voltage %.3f V Current %.1f mA Power %.0f mW\n", current_sen_names[i], p[i]->getBusVoltage_V(), p[i]->getCurrent_mA(), p[i]->getPower_mW());
     }
     {
       Serial.println();
@@ -282,7 +283,7 @@ void loop() // run over and over again
     imu_accel.add(accel.acceleration.z);
 
     JsonArray imu_gyro = imu.createNestedArray("gyro");
-    imu_gyro.add(gyro.gyro.x);
+     imu_gyro.add(gyro.gyro.x);
     imu_gyro.add(gyro.gyro.y);
     imu_gyro.add(gyro.gyro.z);
 
@@ -293,22 +294,18 @@ void loop() // run over and over again
 
     // Add temperatures from the array to the JSON object
 
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < TEMPS_COUNT; i++)
     {
-      const char *json_labels[7] = { "obc temp", "pdu temp", "battery board temp", "solar panel 1 temp", "solar panel 2 temp", "solar panel 3 temp", "solar panel 4 temp" };
-
-      JsonObject temp = doc.createNestedObject(json_labels[i]);
+      JsonObject temp = doc.createNestedObject(temp_sen_names[i]);
       temp["volts"] = voltage[i];
       temp["celsius"] = temperatureC[i];
     }
 
     // Add to the JSON the 4 solar panels and 1 Battery stats
 
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < CURRENT_COUNT; i++)
     {
-      const char *json_labels[5] = { "solar panel 1", "solar panel 2", "solar panel 3", "solar panel 4", "battery 1" };
-
-      JsonObject temp = doc.createNestedObject(json_labels[i]);
+      JsonObject temp = doc.createNestedObject(current_sen_names[i]);
       temp["vol"] = p[i]->getBusVoltage_V();
       temp["cur"] = p[i]->getCurrent_mA();
       temp["wat"] = p[i]->getPower_mW();
