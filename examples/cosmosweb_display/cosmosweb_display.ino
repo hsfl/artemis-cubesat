@@ -99,7 +99,7 @@ void setup()
 void loop() // run over and over again
 
 // GPS
-  
+
 {
   if (GPS.available())
   {
@@ -218,7 +218,7 @@ void loop() // run over and over again
     sensors_event_t gyro;
     sensors_event_t temp;
     sox.getEvent(&accel, &gyro, &temp);
-    
+
     Serial.print("IMU Temperature ");
     Serial.print(temp.temperature);
     Serial.println(" °C");
@@ -263,7 +263,7 @@ void loop() // run over and over again
 
     doc["time"] = millis();
     doc["node_name"] = "artemis";
-    
+
     // JSON for GPS
 
     JsonObject gps = doc.createNestedObject("gps");
@@ -278,9 +278,9 @@ void loop() // run over and over again
     char timestr[64];
     sprintf(timestr, "%04d-%02d-%02dT%02d:%02d:%02d.%dZ", GPS.year, GPS.month, GPS.day, GPS.hour, GPS.minute, GPS.seconds, GPS.milliseconds);
     gps["time"] = timestr;
-    
+
     // JSON for IMU
-    
+
     JsonObject imu = doc.createNestedObject("imu");
     imu["temp"] = temp.temperature;
 
@@ -290,7 +290,7 @@ void loop() // run over and over again
     imu_accel.add(accel.acceleration.z);
 
     JsonArray imu_gyro = imu.createNestedArray("gyro");
-     imu_gyro.add(gyro.gyro.x);
+    imu_gyro.add(gyro.gyro.x);
     imu_gyro.add(gyro.gyro.y);
     imu_gyro.add(gyro.gyro.z);
 
@@ -308,7 +308,7 @@ void loop() // run over and over again
       temp["celsius"] = temperatureC[i];
     }
 
-    // JSON for current sensors 
+    // JSON for current sensors
 
     for (int i = 0; i < CURRENT_COUNT; i++)
     {
