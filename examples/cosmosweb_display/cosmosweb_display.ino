@@ -97,6 +97,9 @@ void setup()
 }
 //----------------------------------------------------------------------------------------------------------------------
 void loop() // run over and over again
+
+// GPS
+  
 {
   if (GPS.available())
   {
@@ -210,12 +213,12 @@ void loop() // run over and over again
 
     // Accelerometer-Gyroscope
 
-    // Get a new normalized sensor event
+    // Get a new normalized sensor event for IMU
     sensors_event_t accel;
     sensors_event_t gyro;
     sensors_event_t temp;
     sox.getEvent(&accel, &gyro, &temp);
-
+    
     Serial.print("IMU Temperature ");
     Serial.print(temp.temperature);
     Serial.println(" °C");
@@ -240,11 +243,11 @@ void loop() // run over and over again
     Serial.println(" radians/s ");
     Serial.println();
 
-    // Print out 4 Solar and 1 Battery stats below
+    // Current Sensors
 
     Adafruit_INA219 * p[CURRENT_COUNT] = { &ina219_1, &ina219_2, &ina219_3, &ina219_4, &ina219_5 };
 
-    //Sensor 1:  current, power, bus
+    // current, power, and bus
 
     for (int i = 0; i < CURRENT_COUNT; i++)
     {
@@ -260,6 +263,8 @@ void loop() // run over and over again
 
     doc["time"] = millis();
     doc["node_name"] = "artemis";
+    
+    // JSON for GPS
 
     JsonObject gps = doc.createNestedObject("gps");
     gps["long"] = GPS.longitude;
@@ -273,7 +278,9 @@ void loop() // run over and over again
     char timestr[64];
     sprintf(timestr, "%04d-%02d-%02dT%02d:%02d:%02d.%dZ", GPS.year, GPS.month, GPS.day, GPS.hour, GPS.minute, GPS.seconds, GPS.milliseconds);
     gps["time"] = timestr;
-
+    
+    // JSON for IMU
+    
     JsonObject imu = doc.createNestedObject("imu");
     imu["temp"] = temp.temperature;
 
@@ -292,7 +299,7 @@ void loop() // run over and over again
     imu_magn.add(event.magnetic.y);
     imu_magn.add(event.magnetic.z);
 
-    // Add temperatures from the array to the JSON object
+    // JSON for temperature sensors
 
     for (int i = 0; i < TEMPS_COUNT; i++)
     {
@@ -301,7 +308,7 @@ void loop() // run over and over again
       temp["celsius"] = temperatureC[i];
     }
 
-    // Add to the JSON the 4 solar panels and 1 Battery stats
+    // JSON for current sensors 
 
     for (int i = 0; i < CURRENT_COUNT; i++)
     {
