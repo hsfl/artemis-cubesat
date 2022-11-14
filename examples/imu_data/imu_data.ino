@@ -37,12 +37,12 @@ void loop()
     sensors_event_t temp;
     imu.getEvent(&accel, &gyro, &temp);
 
-    Serial.print("\t\tTemperature ");
+    Serial.print("\tTemperature ");
     Serial.print(temp.temperature);
     Serial.println(" deg C");
 
     /* Display the results (acceleration is measured in m/s^2) */
-    Serial.print("\t\tAccel X: ");
+    Serial.print("\tAccel X: ");
     Serial.print(accel.acceleration.x);
     Serial.print(" \tY: ");
     Serial.print(accel.acceleration.y);
@@ -51,24 +51,25 @@ void loop()
     Serial.println(" m/s^2 ");
 
     /* Display the results (rotation is measured in rad/s) */
-    Serial.print("\t\tGyro X: ");
+    Serial.print("\tGyro X: ");
     Serial.print(gyro.gyro.x);
     Serial.print(" \tY: ");
     Serial.print(gyro.gyro.y);
     Serial.print(" \tZ: ");
     Serial.print(gyro.gyro.z);
     Serial.println(" radians/s ");
-    Serial.println();
 
     // prints magnetometer readings on the serial console
     sensors_event_t event;
     magnetometer.getEvent(&event);
     /* Display the results (magnetic field is measured in uTesla) */
-    Serial.print("\tX: ");
+    Serial.print("\tMagn X: ");
     Serial.print(event.magnetic.x);
     Serial.print(" \tY: ");
     Serial.print(event.magnetic.y);
     Serial.print(" \tZ: ");
     Serial.print(event.magnetic.z);
     Serial.println(" uTesla ");
+
+    delay(5000);
 }
