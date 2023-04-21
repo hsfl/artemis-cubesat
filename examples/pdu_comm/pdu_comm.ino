@@ -193,7 +193,6 @@ void loop()
                   {
                       goto end;
                   }
-                  break;
               }
           }
           if ((response[1] == sw + PDU_CMD_OFFSET) || (sw == (uint8_t)PDU_SW::All && response[0] == (uint8_t)PDU_Type::DataSwitchTelem + PDU_CMD_OFFSET))
@@ -292,6 +291,10 @@ uint8_t get_sw(String str)
   if(str.indexOf("sw_5v_4") > 0)
   {
     return (uint8_t)PDU_SW::SW_5V_4;
+  }
+  if(str.indexOf("sw_12v") > 0)
+  {
+    return (uint8_t)PDU_SW::SW_12V;
   }
   if(str.indexOf("vbatt") > 0)
   {
