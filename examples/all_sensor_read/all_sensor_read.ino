@@ -101,10 +101,9 @@ void setup()
     }
 
     // INA219 Setup
-    Wire.begin();
     for (int i = 0; i < 5; i++)
     {
-        bool sensorConnected = ina219s[i].begin();
+        bool sensorConnected = ina219s[i].begin(&Wire2);
         if (sensorConnected)
         {
             Serial.print(ina219Labels[i]);

@@ -27,10 +27,9 @@ void setup()
   Serial.begin(9600);
 
   // Initialize I2C communication and configure each INA219 sensor
-  Wire.begin();
   for (int i = 0; i < 5; i++)
   {
-    bool sensorConnected = ina219s[i].begin(); // Initialize each INA219 sensor and check if it's connected
+    bool sensorConnected = ina219s[i].begin(&Wire2); // Initialize each INA219 sensor and check if it's connected
     if (sensorConnected)
     {
       Serial.print(ina219Labels[i]);

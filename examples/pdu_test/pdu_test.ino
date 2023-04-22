@@ -30,10 +30,9 @@ void setup()
     Serial.begin(9600);
 
     // Initialize I2C communication and configure each INA219 sensor
-    Wire.begin();
     for (int i = 0; i < 5; i++)
     {
-        if (ina219s[i].begin())
+        if (ina219s[i].begin(&Wire2))
         {                                          // Initialize each INA219 sensor
             ina219s[i].setCalibration_16V_400mA(); // Set the calibration for each INA219 sensor to measure up to 16V and 400mA
         }
