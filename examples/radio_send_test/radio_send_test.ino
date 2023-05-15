@@ -49,7 +49,7 @@ void setup()
   // radio init function, defined below
   radioInit();
   delay(100);
-  // radio setup funcrtion, defined below
+  // radio setup function, defined below
   radioSetup();
   delay(100);
 
