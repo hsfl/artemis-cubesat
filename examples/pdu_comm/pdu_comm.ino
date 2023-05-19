@@ -355,7 +355,7 @@ void display_switches()
   Serial.println("\t VBATT");
   Serial.println("\t HBRIDGE1");
   Serial.println("\t HBRIDGE2");
-  Serial.println("\t BURN");
+  Serial.println("\t BURNALL");
   Serial.println("\t BURN1");
   Serial.println("\t BURN2");
   Serial.print("\n\n$ ");
