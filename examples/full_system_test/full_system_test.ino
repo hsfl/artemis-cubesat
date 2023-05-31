@@ -86,7 +86,7 @@ void setup()
     // Toggle relay state after a delay
     delay(3000);                    // 3 seconds delay
     digitalWrite(rpi_enable, HIGH); // Turn on the relay
-    Serial.print("Raspberry Pi has been powered on")
+    Serial.print("Raspberry Pi has been powered on");
 }
 
 void loop()

@@ -1,5 +1,5 @@
 /*This code connects the Adafruit Mini GPS PA1010D module.
-It initializes the module, sets the NMEA output and update rate, and requests antenna status updates.
+It initializes the module then sets the NMEA output and update rate.
 It then reads and parses the GPS data, and if it has a fix and is connected, it prints the relevant information to the Serial console.
 GPSECHO can be set to true to also echo the raw GPS data to the Serial console.*/
 
@@ -31,9 +31,6 @@ void setup()
 
     // Set the NMEA update rate to 1 Hz
     GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
-
-    // Request updates on antenna status
-    GPS.sendCommand(PGCMD_ANTENNA);
 
     // Give time for the GPS Module to steup and user to open the serial monitor
     delay(10000);
@@ -129,8 +126,6 @@ void loop()
                 Serial.println(GPS.altitude);
                 Serial.print("Satellites: ");
                 Serial.println((int)GPS.satellites);
-                Serial.print("Antenna status: ");
-                Serial.println((int)GPS.antenna);
             }
         }
     }
