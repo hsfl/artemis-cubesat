@@ -50,3 +50,4 @@ void loop()
     // Wait 5 seconds before sending the next JSON string
     delay(5000);
 }
+
