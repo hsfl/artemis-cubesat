@@ -116,6 +116,10 @@ void loop()
     {
       display_switches();
     }
+    else if (input.indexOf("display packet struct") >= 0)
+    {
+      display_packet_struct();
+    }
     else if (input.indexOf("ping") >= 0)
     {
       pdu_packet.type = PDU_Type::CommandPing;
@@ -338,6 +342,8 @@ void display_options()
   Serial.println("\tExample Usage:\t$ GET SW_3V3_1");
   Serial.println("(4) List Available Switches");
   Serial.println("\tExample Usage:\t$ List");
+  Serial.println("(5) Display Packet Struct");
+  Serial.println("\tExample Usage:\t$ Display Packet Struct");
   Serial.print("\n\n$ ");
 }
 
@@ -352,11 +358,29 @@ void display_switches()
   Serial.println("\t SW_5V_2");
   Serial.println("\t SW_5V_3");
   Serial.println("\t SW_5V_4");
+  Serial.println("\t SW_12V");
   Serial.println("\t VBATT");
   Serial.println("\t HBRIDGE1");
   Serial.println("\t HBRIDGE2");
   Serial.println("\t BURNALL");
   Serial.println("\t BURN1");
   Serial.println("\t BURN2");
+  Serial.print("\n\n$ ");
+}
+
+void display_packet_struct()
+{
+  Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+  Serial.println("When setting or getting an individual switch, the PDU returns a packet to indicate the status of that switch.");
+  Serial.println("Below shows the structure of the return packet.");
+  Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++");
+  Serial.println("+ DataSwitchStatus | Switch_ID | 0 (OFF), or 1 (ON) +");
+  Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++");
+  Serial.println("\n\n");
+  Serial.println("When calling 'GET ALL' or 'SET ALL', the PDU returns a packet of 0s and 1s starting from the 1st index.");
+  Serial.println("Below shows which index corresponds to which switch.");
+  Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+  Serial.println("+ DataSwitchTelem | 3V3_1 | 3V3_2 | 5V_1 | 5V_2 | 5V_3 | 5V_4 | 12V | VBATT | BURN1 | BURN2 | HBRIDGE1 | HBRIDGE2 +");
+  Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
   Serial.print("\n\n$ ");
 }
