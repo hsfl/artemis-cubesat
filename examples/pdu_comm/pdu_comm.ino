@@ -23,9 +23,11 @@ enum class PDU_Type : uint8_t
   CommandSetSwitch,
   CommandGetSwitchStatus,
   CommandSetTRQ,
+  CommandGetTRQTelem,
   DataPong,
   DataSwitchStatus,
   DataSwitchTelem,
+  DataTRQTelem,
 };
 
 enum class PDU_SW : uint8_t
@@ -86,6 +88,12 @@ struct __attribute__((packed)) pdu_hbridge_packet
     PDU_Type type;
     TRQ_SELECT select;
     TRQ_CONFIG config;
+};
+
+struct __attribute__((packed)) pdu_hbridge_telem
+{
+    PDU_Type type;
+    TRQ_CONFIG trq_state[4];
 };
 
 int32_t pdu_send(char *buf);
