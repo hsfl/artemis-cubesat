@@ -22,6 +22,7 @@ enum class PDU_Type : uint8_t
   CommandPing,
   CommandSetSwitch,
   CommandGetSwitchStatus,
+  CommandSetTRQ,
   DataPong,
   DataSwitchStatus,
   DataSwitchTelem,
@@ -32,36 +33,62 @@ enum class PDU_SW : uint8_t
   None,
   All,
   SW_3V3_1,
-  SW_3V3_2,
+  RFM23_RADIO,
   SW_5V_1,
-  SW_5V_2,
+  HEATER,
   SW_5V_3,
-  SW_5V_4,
   SW_12V,
   VBATT,
-  WDT,
-  HBRIDGE1,
-  HBRIDGE2,
-  BURN,
   BURN1,
   BURN2,
   RPI,
 };
 
-struct __attribute__((packed)) pdu_packet
+enum class TRQ_SELECT : uint8_t
 {
-  PDU_Type type = PDU_Type::NOP;
-  PDU_SW sw = PDU_SW::None;
-  uint8_t sw_state = 0;
+  TRQ1,
+  TRQ2,
+  TRQ1A,
+  TRQ1B,
+  TRQ2A,
+  TRQ2B,
 };
 
-struct __attribute__((packed)) pdu_telem
+enum class TRQ_CONFIG : uint8_t
 {
-  PDU_Type type = PDU_Type::DataSwitchTelem;
-  uint8_t sw_state[12];
+  SLEEP,
+  MOTOR_COAST_FAST_DECAY,
+  DIR_REVERSE,
+  DIR_FORWARD,
+  MOTOR_BREAK_SLOW_DECAY,
 };
 
-int32_t pdu_send(pdu_packet packet);
+struct __attribute__((packed)) pdu_nop_packet
+{
+    PDU_Type type;
+};
+
+struct __attribute__((packed)) pdu_sw_packet
+{
+    PDU_Type type;
+    PDU_SW sw;
+    uint8_t sw_state;
+};
+
+struct __attribute__ ((packed)) pdu_sw_telem
+{
+    PDU_Type type;
+    uint8_t sw_state[10];
+};
+
+struct __attribute__((packed)) pdu_hbridge_packet
+{
+    PDU_Type type;
+    TRQ_SELECT select;
+    TRQ_CONFIG config;
+};
+
+int32_t pdu_send(char *buf);
 int32_t pdu_recv(String &response);
 uint8_t get_sw(String str);
 void display_options();
@@ -71,7 +98,6 @@ elapsedMillis timeout;
 
 void setup()
 {
-  pdu_packet pdu_packet;
   String response;
 
   Serial.begin(115200);
@@ -81,10 +107,13 @@ void setup()
     ;
 
   // Ensure PDU is communicating with Teensy
-  pdu_packet.type = PDU_Type::CommandPing;
+  pdu_nop_packet ping_packet;
+  ping_packet.type = PDU_Type::CommandPing;
+  char buf[sizeof(struct pdu_nop_packet)];
+  memcpy(buf, &ping_packet, sizeof(struct pdu_nop_packet));
   while (1)
   {
-    pdu_send(pdu_packet);
+    pdu_send(buf, sizeof(struct pdu_nop_packet));
     pdu_recv(response);
     if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_OFFSET)
     {
@@ -99,7 +128,6 @@ void setup()
 
 void loop()
 {
-  pdu_packet pdu_packet;
   String response;
 
   if (Serial.available() > 0)
@@ -122,12 +150,16 @@ void loop()
     }
     else if (input.indexOf("ping") >= 0)
     {
-      pdu_packet.type = PDU_Type::CommandPing;
+      pdu_nop_packet ping_packet;
+      ping_packet.type = PDU_Type::CommandPing;
+
+      char buf[sizeof(struct pdu_nop_packet)];
+      memcpy(buf, &ping_packet, sizeof(struct pdu_nop_packet));
 
       timeout = 0;
       while (1)
       {
-        pdu_send(pdu_packet);
+        pdu_send(buf, sizeof(struct pdu_nop_packet));
         pdu_recv(response);
         if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_OFFSET)
         {
@@ -148,6 +180,8 @@ void loop()
     }
     else if (input.indexOf("get") >= 0 || input.indexOf("set") >= 0)
     {
+      pdu_sw_packet pdu_packet;
+
       uint8_t sw = get_sw(input);
       if (sw < 0)
       {
@@ -180,9 +214,12 @@ void loop()
         pdu_packet.type = PDU_Type::CommandGetSwitchStatus;
       }
 
+      char buf[sizeof(struct pdu_sw_packet)];
+      memcpy(buf, &pdu_packet, sizeof(struct pdu_sw_packet));
+
       while (1)
       {
-        pdu_send(pdu_packet);
+        pdu_send(buf, sizeof(struct pdu_sw_packet));
 
         timeout = 0;
         int attempts = 1;
@@ -225,13 +262,10 @@ void loop()
 end:;
 }
 
-int32_t pdu_send(pdu_packet packet)
+int32_t pdu_send(char *cmd, int len)
 {
-  char *cmd = (char *)malloc(sizeof(packet));
-  memcpy(cmd, &packet, sizeof(packet));
-
   std::string msg = "";
-  for (size_t i = 0; i < sizeof(packet); i++)
+  for (int i = 0; i < len; i++)
   {
     msg += (cmd[i] + PDU_CMD_OFFSET);
   }
@@ -246,7 +280,6 @@ int32_t pdu_send(pdu_packet packet)
   }
   Serial.println(']');
 
-  free(cmd);
   delay(1);
   return 0;
 }
@@ -274,25 +307,21 @@ uint8_t get_sw(String str)
   {
     return (uint8_t)PDU_SW::SW_3V3_1;
   }
-  if (str.indexOf("sw_3v3_2") > 0)
+  if (str.indexOf("rfm23_radio") > 0)
   {
-    return (uint8_t)PDU_SW::SW_3V3_2;
+    return (uint8_t)PDU_SW::RFM23_RADIO;
   }
   if (str.indexOf("sw_5v_1") > 0)
   {
     return (uint8_t)PDU_SW::SW_5V_1;
   }
-  if (str.indexOf("sw_5v_2") > 0)
+  if (str.indexOf("heater") > 0)
   {
-    return (uint8_t)PDU_SW::SW_5V_2;
+    return (uint8_t)PDU_SW::HEATER;
   }
   if (str.indexOf("sw_5v_3") > 0)
   {
     return (uint8_t)PDU_SW::SW_5V_3;
-  }
-  if (str.indexOf("sw_5v_4") > 0)
-  {
-    return (uint8_t)PDU_SW::SW_5V_4;
   }
   if (str.indexOf("sw_12v") > 0)
   {
@@ -301,18 +330,6 @@ uint8_t get_sw(String str)
   if (str.indexOf("vbatt") > 0)
   {
     return (uint8_t)PDU_SW::VBATT;
-  }
-  if (str.indexOf("hbridge1") > 0)
-  {
-    return (uint8_t)PDU_SW::HBRIDGE1;
-  }
-  if (str.indexOf("hbridge2") > 0)
-  {
-    return (uint8_t)PDU_SW::HBRIDGE2;
-  }
-  if (str.indexOf("burnall") > 0)
-  {
-    return (uint8_t)PDU_SW::BURN;
   }
   if (str.indexOf("burn1") > 0)
   {
@@ -342,8 +359,6 @@ void display_options()
   Serial.println("\tExample Usage:\t$ GET SW_3V3_1");
   Serial.println("(4) List Available Switches");
   Serial.println("\tExample Usage:\t$ List");
-  Serial.println("(5) Display Packet Struct");
-  Serial.println("\tExample Usage:\t$ Display Packet Struct");
   Serial.print("\n\n$ ");
 }
 
@@ -353,16 +368,12 @@ void display_switches()
   Serial.println("Available Switches");
   Serial.println("========================================================");
   Serial.println("\t SW_3V3_1");
-  Serial.println("\t SW_3V3_2");
+  Serial.println("\t RFM23_RADIO");
   Serial.println("\t SW_5V_1");
-  Serial.println("\t SW_5V_2");
+  Serial.println("\t HEATER");
   Serial.println("\t SW_5V_3");
-  Serial.println("\t SW_5V_4");
   Serial.println("\t SW_12V");
   Serial.println("\t VBATT");
-  Serial.println("\t HBRIDGE1");
-  Serial.println("\t HBRIDGE2");
-  Serial.println("\t BURNALL");
   Serial.println("\t BURN1");
   Serial.println("\t BURN2");
   Serial.print("\n\n$ ");
