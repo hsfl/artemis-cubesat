@@ -196,7 +196,7 @@ void loop()
       pdu_sw_packet pdu_packet;
 
       uint8_t sw = get_sw(input);
-      if (sw < 0)
+      if (sw == 0)
       {
         Serial.println("Invalid Switch");
         display_options();
