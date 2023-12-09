@@ -359,6 +359,8 @@ void display_options()
   Serial.println("\tExample Usage:\t$ GET SW_3V3_1");
   Serial.println("(4) List Available Switches");
   Serial.println("\tExample Usage:\t$ List");
+  Serial.println("(5) Display Packet Struct");
+  Serial.println("\tExample Usage:\t$ Display Packet Struct");
   Serial.print("\n\n$ ");
 }
 
