@@ -99,6 +99,7 @@ struct __attribute__((packed)) pdu_hbridge_telem
 int32_t pdu_send(char *buf);
 int32_t pdu_recv(String &response);
 uint8_t get_sw(String str);
+uint8_t get_trq_config(String str);
 void display_options();
 void display_switches();
 
@@ -148,9 +149,13 @@ void loop()
     {
       display_options();
     }
-    else if (input.indexOf("list") >= 0)
+    else if (input.indexOf("list switch") >= 0)
     {
       display_switches();
+    }
+    else if (input.indexOf("list torque") >= 0)
+    {
+      display_torques();
     }
     else if (input.indexOf("display packet struct") >= 0)
     {
@@ -186,7 +191,7 @@ void loop()
 
       Serial.print("$ ");
     }
-    else if (input.indexOf("get") >= 0 || input.indexOf("set") >= 0)
+    else if (input.indexOf("get switch") >= 0 || input.indexOf("set switch") >= 0)
     {
       pdu_sw_packet pdu_packet;
 
@@ -258,6 +263,135 @@ void loop()
       Serial.println(response.c_str());
       Serial.print("$ ");
       goto end;
+    }
+    else if (input.indexOf("get torque") >= 0 || input.indexOf("set torque") >= 0)
+    {
+      if (input.indexOf("set") >= 0)
+      {
+        pdu_hbridge_packet packet;
+        packet.type = PDU_Type::CommandSetTRQ;
+
+        uint8_t trqConfig = get_trq_config(input);
+        if (trqConfig == 99)
+        {
+          Serial.println("Invalid Configuration");
+          goto end;
+        }
+        packet.config = (TRQ_CONFIG) trqConfig;
+
+        if (input.indexOf("1:1") > 0)
+        {
+          packet.select = TRQ_SELECT::TRQ1A;
+          if (packet.config == TRQ_CONFIG::SLEEP)
+          {
+            packet.select = TRQ_SELECT::TRQ1;
+          }
+        } else if (input.indexOf("1:2") > 0)
+        {
+          packet.select = TRQ_SELECT::TRQ1B;
+          if (packet.config == TRQ_CONFIG::SLEEP)
+          {
+            packet.select = TRQ_SELECT::TRQ1;
+          }
+        } else if (input.indexOf("2:1") > 0)
+        {
+          packet.select = TRQ_SELECT::TRQ2A;
+          if (packet.config == TRQ_CONFIG::SLEEP)
+          {
+            packet.select = TRQ_SELECT::TRQ2;
+          }
+        } else if (input.indexOf("2:2") > 0)
+        {
+          packet.select = TRQ_SELECT::TRQ2B;
+          if (packet.config == TRQ_CONFIG::SLEEP)
+          {
+            packet.select = TRQ_SELECT::TRQ2;
+          }
+        } else {
+          Serial.println("Invalid Torque Coil Selection: {board}:{coil}");
+          goto end;
+        }
+
+        char buf[sizeof(struct pdu_hbridge_packet)];
+        memcpy(buf, &packet, sizeof(struct pdu_hbridge_packet));
+        
+        while (1)
+        {
+          pdu_send(buf, sizeof(struct pdu_hbridge_packet));
+
+          timeout = 0;
+          int attempts = 1;
+          while (pdu_recv(response) < 0)
+          {
+            if (timeout > 5000)
+            {
+              Serial.print("Attempt ");
+              Serial.print(attempts);
+              Serial.println(": FAIL TO SEND CMD TO PDU");
+              timeout = 0;
+
+              if (++attempts == 5)
+              {
+                goto end;
+              }
+            }
+          }
+          if (response[0] == (uint8_t)PDU_Type::DataTRQTelem + PDU_CMD_OFFSET)
+          {
+            break;
+          }
+
+          delay(100);
+        }
+
+        Serial.print("UART RECV: ");
+        Serial.println(response.c_str());
+        Serial.print("$ ");
+        goto end;
+      }
+
+      if (input.indexOf("get") >= 0)
+      {
+        pdu_nop_packet packet;
+        packet.type = PDU_Type::CommandGetTRQTelem;
+
+        char buf[sizeof(struct pdu_nop_packet)];
+        memcpy(buf, &packet, sizeof(struct pdu_nop_packet));
+        
+        while (1)
+        {
+          pdu_send(buf, sizeof(struct pdu_nop_packet));
+
+          timeout = 0;
+          int attempts = 1;
+          while (pdu_recv(response) < 0)
+          {
+            if (timeout > 5000)
+            {
+              Serial.print("Attempt ");
+              Serial.print(attempts);
+              Serial.println(": FAIL TO SEND CMD TO PDU");
+              timeout = 0;
+
+              if (++attempts == 5)
+              {
+                goto end;
+              }
+            }
+          }
+          if (response[0] == (uint8_t)PDU_Type::DataTRQTelem + PDU_CMD_OFFSET)
+          {
+            break;
+          }
+
+          delay(100);
+        }
+
+        Serial.print("UART RECV: ");
+        Serial.println(response.c_str());
+        Serial.print("$ ");
+        goto end;
+      }
     }
     else
     {
@@ -354,6 +488,27 @@ uint8_t get_sw(String str)
   return 0;
 }
 
+uint8_t get_trq_config(String str)
+{
+  if (str.indexOf("sleep") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::SLEEP;
+  }
+  if (str.indexOf("coast") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::MOTOR_COAST_FAST_DECAY;
+  }
+  if (str.indexOf("reverse") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::DIR_REVERSE;
+  }
+  if (str.indexOf("forward") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::DIR_FORWARD;
+  }
+  return 99;
+}
+
 void display_options()
 {
   Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
@@ -361,14 +516,30 @@ void display_options()
   Serial.println("========================================================");
   Serial.println("(1) Ping");
   Serial.println("\tExample Usage:\t$ Ping");
+
   Serial.println("(2) Set Switch ON/OFF");
-  Serial.println("\tExample Usage:\t$ SET SW_3V3_1 ON");
+  Serial.println("\tSyntax: SET SWITCH {switch name} {on/off}");
+  Serial.println("\tExample Usage:\t$ SET SWITCH SW_3V3_1 ON");
+
   Serial.println("(3) Get Switch Status");
-  Serial.println("\tExample Usage:\t$ GET SW_3V3_1");
+  Serial.println("\tSyntax: GET SWITCH {switch name}");
+  Serial.println("\tExample Usage:\t$ GET SWITCH SW_3V3_1");
+
   Serial.println("(4) List Available Switches");
-  Serial.println("\tExample Usage:\t$ List");
+  Serial.println("\tExample Usage:\t$ List Switch");
+
   Serial.println("(5) Display Packet Struct");
   Serial.println("\tExample Usage:\t$ Display Packet Struct");
+
+  Serial.println("(6) Set Torque Coil Configuration");
+  Serial.println("\tSyntax: GET TORQUE {board}:{coil} {config}");
+  Serial.println("\tExample Usage:\t$ SET TORQUE 1:1 COAST");
+
+  Serial.println("(7) Get All Torque Coil Configurations");
+  Serial.println("\tExample Usage:\t$ GET TORQUE");
+
+  Serial.println("(8) List Available Torque Coils and Configurations");
+  Serial.println("\tExample Usage:\t$ List Torque");
   Serial.print("\n\n$ ");
 }
 
@@ -386,6 +557,21 @@ void display_switches()
   Serial.println("\t VBATT");
   Serial.println("\t BURN1");
   Serial.println("\t BURN2");
+  Serial.print("\n\n$ ");
+}
+
+void display_torques()
+{
+  Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+  Serial.println("Board values: 1, 2");
+  Serial.println("Coil values: 1, 2");
+  Serial.println("Torque Coil Configurations");
+  Serial.println("========================================================");
+  Serial.println("\t SLEEP");
+  Serial.println("\t COAST");
+  Serial.println("\t BREAK");
+  Serial.println("\t FORWARD");
+  Serial.println("\t REVERSE");
   Serial.print("\n\n$ ");
 }
 
