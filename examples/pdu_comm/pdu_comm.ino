@@ -62,7 +62,7 @@ enum class TRQ_CONFIG : uint8_t
   MOTOR_COAST_FAST_DECAY,
   DIR_REVERSE,
   DIR_FORWARD,
-  MOTOR_BREAK_SLOW_DECAY,
+  MOTOR_BRAKE_SLOW_DECAY,
 };
 
 struct __attribute__((packed)) pdu_nop_packet
