@@ -506,6 +506,10 @@ uint8_t get_trq_config(String str)
   {
     return (uint8_t)TRQ_CONFIG::DIR_FORWARD;
   }
+  if (str.indexOf("brake") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::MOTOR_BRAKE_SLOW_DECAY;
+  }
   return 99;
 }
 
@@ -569,7 +573,7 @@ void display_torques()
   Serial.println("========================================================");
   Serial.println("\t SLEEP");
   Serial.println("\t COAST");
-  Serial.println("\t BREAK");
+  Serial.println("\t BRAKE");
   Serial.println("\t FORWARD");
   Serial.println("\t REVERSE");
   Serial.print("\n\n$ ");
