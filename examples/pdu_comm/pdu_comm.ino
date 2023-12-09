@@ -392,8 +392,8 @@ void display_packet_struct()
   Serial.println("\n\n");
   Serial.println("When calling 'GET ALL' or 'SET ALL', the PDU returns a packet of 0s and 1s starting from the 1st index.");
   Serial.println("Below shows which index corresponds to which switch.");
-  Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-  Serial.println("+ DataSwitchTelem | 3V3_1 | 3V3_2 | 5V_1 | 5V_2 | 5V_3 | 5V_4 | 12V | VBATT | BURN1 | BURN2 | HBRIDGE1 | HBRIDGE2 +");
-  Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+  Serial.println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+  Serial.println("+ DataSwitchTelem | 3V3_1 | RFM23 | 5V_1 | HEATER | 5V_3 | 12V | VBATT | BURN1 | BURN2 +");
+  Serial.println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
   Serial.print("\n\n$ ");
 }
