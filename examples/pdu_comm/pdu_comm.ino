@@ -93,6 +93,7 @@ struct __attribute__((packed)) pdu_hbridge_packet
 struct __attribute__((packed)) pdu_hbridge_telem
 {
     PDU_Type type;
+    uint8_t hbridge_state[2];
     TRQ_CONFIG trq_state[4];
 };
 
