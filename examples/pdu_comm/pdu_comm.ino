@@ -22,9 +22,12 @@ enum class PDU_Type : uint8_t
   CommandPing,
   CommandSetSwitch,
   CommandGetSwitchStatus,
+  CommandSetTRQ,
+  CommandGetTRQTelem,
   DataPong,
   DataSwitchStatus,
   DataSwitchTelem,
+  DataTRQTelem,
 };
 
 enum class PDU_SW : uint8_t
@@ -32,38 +35,72 @@ enum class PDU_SW : uint8_t
   None,
   All,
   SW_3V3_1,
-  SW_3V3_2,
+  RFM23_RADIO,
   SW_5V_1,
-  SW_5V_2,
+  HEATER,
   SW_5V_3,
-  SW_5V_4,
   SW_12V,
   VBATT,
-  WDT,
-  HBRIDGE1,
-  HBRIDGE2,
-  BURN,
   BURN1,
   BURN2,
   RPI,
 };
 
-struct __attribute__((packed)) pdu_packet
+enum class TRQ_SELECT : uint8_t
 {
-  PDU_Type type = PDU_Type::NOP;
-  PDU_SW sw = PDU_SW::None;
-  uint8_t sw_state = 0;
+  TRQ1,
+  TRQ2,
+  TRQ1A,
+  TRQ1B,
+  TRQ2A,
+  TRQ2B,
 };
 
-struct __attribute__((packed)) pdu_telem
+enum class TRQ_CONFIG : uint8_t
 {
-  PDU_Type type = PDU_Type::DataSwitchTelem;
-  uint8_t sw_state[12];
+  SLEEP,
+  MOTOR_COAST_FAST_DECAY,
+  DIR_REVERSE,
+  DIR_FORWARD,
+  MOTOR_BRAKE_SLOW_DECAY,
 };
 
-int32_t pdu_send(pdu_packet packet);
+struct __attribute__((packed)) pdu_nop_packet
+{
+    PDU_Type type;
+};
+
+struct __attribute__((packed)) pdu_sw_packet
+{
+    PDU_Type type;
+    PDU_SW sw;
+    uint8_t sw_state;
+};
+
+struct __attribute__ ((packed)) pdu_sw_telem
+{
+    PDU_Type type;
+    uint8_t sw_state[10];
+};
+
+struct __attribute__((packed)) pdu_hbridge_packet
+{
+    PDU_Type type;
+    TRQ_SELECT select;
+    TRQ_CONFIG config;
+};
+
+struct __attribute__((packed)) pdu_hbridge_telem
+{
+    PDU_Type type;
+    uint8_t hbridge_state[2];
+    TRQ_CONFIG trq_state[4];
+};
+
+int32_t pdu_send(char *buf);
 int32_t pdu_recv(String &response);
 uint8_t get_sw(String str);
+uint8_t get_trq_config(String str);
 void display_options();
 void display_switches();
 
@@ -71,7 +108,6 @@ elapsedMillis timeout;
 
 void setup()
 {
-  pdu_packet pdu_packet;
   String response;
 
   Serial.begin(115200);
@@ -81,10 +117,13 @@ void setup()
     ;
 
   // Ensure PDU is communicating with Teensy
-  pdu_packet.type = PDU_Type::CommandPing;
+  pdu_nop_packet ping_packet;
+  ping_packet.type = PDU_Type::CommandPing;
+  char buf[sizeof(struct pdu_nop_packet)];
+  memcpy(buf, &ping_packet, sizeof(struct pdu_nop_packet));
   while (1)
   {
-    pdu_send(pdu_packet);
+    pdu_send(buf, sizeof(struct pdu_nop_packet));
     pdu_recv(response);
     if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_OFFSET)
     {
@@ -99,7 +138,6 @@ void setup()
 
 void loop()
 {
-  pdu_packet pdu_packet;
   String response;
 
   if (Serial.available() > 0)
@@ -112,9 +150,13 @@ void loop()
     {
       display_options();
     }
-    else if (input.indexOf("list") >= 0)
+    else if (input.indexOf("list switch") >= 0)
     {
       display_switches();
+    }
+    else if (input.indexOf("list torque") >= 0)
+    {
+      display_torques();
     }
     else if (input.indexOf("display packet struct") >= 0)
     {
@@ -122,12 +164,16 @@ void loop()
     }
     else if (input.indexOf("ping") >= 0)
     {
-      pdu_packet.type = PDU_Type::CommandPing;
+      pdu_nop_packet ping_packet;
+      ping_packet.type = PDU_Type::CommandPing;
+
+      char buf[sizeof(struct pdu_nop_packet)];
+      memcpy(buf, &ping_packet, sizeof(struct pdu_nop_packet));
 
       timeout = 0;
       while (1)
       {
-        pdu_send(pdu_packet);
+        pdu_send(buf, sizeof(struct pdu_nop_packet));
         pdu_recv(response);
         if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_OFFSET)
         {
@@ -146,10 +192,12 @@ void loop()
 
       Serial.print("$ ");
     }
-    else if (input.indexOf("get") >= 0 || input.indexOf("set") >= 0)
+    else if (input.indexOf("get switch") >= 0 || input.indexOf("set switch") >= 0)
     {
+      pdu_sw_packet pdu_packet;
+
       uint8_t sw = get_sw(input);
-      if (sw < 0)
+      if (sw == 0)
       {
         Serial.println("Invalid Switch");
         display_options();
@@ -180,9 +228,12 @@ void loop()
         pdu_packet.type = PDU_Type::CommandGetSwitchStatus;
       }
 
+      char buf[sizeof(struct pdu_sw_packet)];
+      memcpy(buf, &pdu_packet, sizeof(struct pdu_sw_packet));
+
       while (1)
       {
-        pdu_send(pdu_packet);
+        pdu_send(buf, sizeof(struct pdu_sw_packet));
 
         timeout = 0;
         int attempts = 1;
@@ -214,6 +265,135 @@ void loop()
       Serial.print("$ ");
       goto end;
     }
+    else if (input.indexOf("get torque") >= 0 || input.indexOf("set torque") >= 0)
+    {
+      if (input.indexOf("set") >= 0)
+      {
+        pdu_hbridge_packet packet;
+        packet.type = PDU_Type::CommandSetTRQ;
+
+        uint8_t trqConfig = get_trq_config(input);
+        if (trqConfig == 99)
+        {
+          Serial.println("Invalid Configuration");
+          goto end;
+        }
+        packet.config = (TRQ_CONFIG) trqConfig;
+
+        if (input.indexOf("1:1") > 0)
+        {
+          packet.select = TRQ_SELECT::TRQ1A;
+          if (packet.config == TRQ_CONFIG::SLEEP)
+          {
+            packet.select = TRQ_SELECT::TRQ1;
+          }
+        } else if (input.indexOf("1:2") > 0)
+        {
+          packet.select = TRQ_SELECT::TRQ1B;
+          if (packet.config == TRQ_CONFIG::SLEEP)
+          {
+            packet.select = TRQ_SELECT::TRQ1;
+          }
+        } else if (input.indexOf("2:1") > 0)
+        {
+          packet.select = TRQ_SELECT::TRQ2A;
+          if (packet.config == TRQ_CONFIG::SLEEP)
+          {
+            packet.select = TRQ_SELECT::TRQ2;
+          }
+        } else if (input.indexOf("2:2") > 0)
+        {
+          packet.select = TRQ_SELECT::TRQ2B;
+          if (packet.config == TRQ_CONFIG::SLEEP)
+          {
+            packet.select = TRQ_SELECT::TRQ2;
+          }
+        } else {
+          Serial.println("Invalid Torque Coil Selection: {board}:{coil}");
+          goto end;
+        }
+
+        char buf[sizeof(struct pdu_hbridge_packet)];
+        memcpy(buf, &packet, sizeof(struct pdu_hbridge_packet));
+        
+        while (1)
+        {
+          pdu_send(buf, sizeof(struct pdu_hbridge_packet));
+
+          timeout = 0;
+          int attempts = 1;
+          while (pdu_recv(response) < 0)
+          {
+            if (timeout > 5000)
+            {
+              Serial.print("Attempt ");
+              Serial.print(attempts);
+              Serial.println(": FAIL TO SEND CMD TO PDU");
+              timeout = 0;
+
+              if (++attempts == 5)
+              {
+                goto end;
+              }
+            }
+          }
+          if (response[0] == (uint8_t)PDU_Type::DataTRQTelem + PDU_CMD_OFFSET)
+          {
+            break;
+          }
+
+          delay(100);
+        }
+
+        Serial.print("UART RECV: ");
+        Serial.println(response.c_str());
+        Serial.print("$ ");
+        goto end;
+      }
+
+      if (input.indexOf("get") >= 0)
+      {
+        pdu_nop_packet packet;
+        packet.type = PDU_Type::CommandGetTRQTelem;
+
+        char buf[sizeof(struct pdu_nop_packet)];
+        memcpy(buf, &packet, sizeof(struct pdu_nop_packet));
+        
+        while (1)
+        {
+          pdu_send(buf, sizeof(struct pdu_nop_packet));
+
+          timeout = 0;
+          int attempts = 1;
+          while (pdu_recv(response) < 0)
+          {
+            if (timeout > 5000)
+            {
+              Serial.print("Attempt ");
+              Serial.print(attempts);
+              Serial.println(": FAIL TO SEND CMD TO PDU");
+              timeout = 0;
+
+              if (++attempts == 5)
+              {
+                goto end;
+              }
+            }
+          }
+          if (response[0] == (uint8_t)PDU_Type::DataTRQTelem + PDU_CMD_OFFSET)
+          {
+            break;
+          }
+
+          delay(100);
+        }
+
+        Serial.print("UART RECV: ");
+        Serial.println(response.c_str());
+        Serial.print("$ ");
+        goto end;
+      }
+    }
     else
     {
       Serial.println("Invalid Command (Type 'help' for help)");
@@ -225,13 +405,10 @@ void loop()
 end:;
 }
 
-int32_t pdu_send(pdu_packet packet)
+int32_t pdu_send(char *cmd, int len)
 {
-  char *cmd = (char *)malloc(sizeof(packet));
-  memcpy(cmd, &packet, sizeof(packet));
-
   std::string msg = "";
-  for (size_t i = 0; i < sizeof(packet); i++)
+  for (int i = 0; i < len; i++)
   {
     msg += (cmd[i] + PDU_CMD_OFFSET);
   }
@@ -246,7 +423,6 @@ int32_t pdu_send(pdu_packet packet)
   }
   Serial.println(']');
 
-  free(cmd);
   delay(1);
   return 0;
 }
@@ -274,25 +450,21 @@ uint8_t get_sw(String str)
   {
     return (uint8_t)PDU_SW::SW_3V3_1;
   }
-  if (str.indexOf("sw_3v3_2") > 0)
+  if (str.indexOf("rfm23_radio") > 0)
   {
-    return (uint8_t)PDU_SW::SW_3V3_2;
+    return (uint8_t)PDU_SW::RFM23_RADIO;
   }
   if (str.indexOf("sw_5v_1") > 0)
   {
     return (uint8_t)PDU_SW::SW_5V_1;
   }
-  if (str.indexOf("sw_5v_2") > 0)
+  if (str.indexOf("heater") > 0)
   {
-    return (uint8_t)PDU_SW::SW_5V_2;
+    return (uint8_t)PDU_SW::HEATER;
   }
   if (str.indexOf("sw_5v_3") > 0)
   {
     return (uint8_t)PDU_SW::SW_5V_3;
-  }
-  if (str.indexOf("sw_5v_4") > 0)
-  {
-    return (uint8_t)PDU_SW::SW_5V_4;
   }
   if (str.indexOf("sw_12v") > 0)
   {
@@ -301,18 +473,6 @@ uint8_t get_sw(String str)
   if (str.indexOf("vbatt") > 0)
   {
     return (uint8_t)PDU_SW::VBATT;
-  }
-  if (str.indexOf("hbridge1") > 0)
-  {
-    return (uint8_t)PDU_SW::HBRIDGE1;
-  }
-  if (str.indexOf("hbridge2") > 0)
-  {
-    return (uint8_t)PDU_SW::HBRIDGE2;
-  }
-  if (str.indexOf("burnall") > 0)
-  {
-    return (uint8_t)PDU_SW::BURN;
   }
   if (str.indexOf("burn1") > 0)
   {
@@ -329,6 +489,31 @@ uint8_t get_sw(String str)
   return 0;
 }
 
+uint8_t get_trq_config(String str)
+{
+  if (str.indexOf("sleep") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::SLEEP;
+  }
+  if (str.indexOf("coast") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::MOTOR_COAST_FAST_DECAY;
+  }
+  if (str.indexOf("reverse") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::DIR_REVERSE;
+  }
+  if (str.indexOf("forward") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::DIR_FORWARD;
+  }
+  if (str.indexOf("brake") > 0)
+  {
+    return (uint8_t)TRQ_CONFIG::MOTOR_BRAKE_SLOW_DECAY;
+  }
+  return 99;
+}
+
 void display_options()
 {
   Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
@@ -336,14 +521,30 @@ void display_options()
   Serial.println("========================================================");
   Serial.println("(1) Ping");
   Serial.println("\tExample Usage:\t$ Ping");
+
   Serial.println("(2) Set Switch ON/OFF");
-  Serial.println("\tExample Usage:\t$ SET SW_3V3_1 ON");
+  Serial.println("\tSyntax: SET SWITCH {switch name} {on/off}");
+  Serial.println("\tExample Usage:\t$ SET SWITCH SW_3V3_1 ON");
+
   Serial.println("(3) Get Switch Status");
-  Serial.println("\tExample Usage:\t$ GET SW_3V3_1");
+  Serial.println("\tSyntax: GET SWITCH {switch name}");
+  Serial.println("\tExample Usage:\t$ GET SWITCH SW_3V3_1");
+
   Serial.println("(4) List Available Switches");
-  Serial.println("\tExample Usage:\t$ List");
+  Serial.println("\tExample Usage:\t$ List Switch");
+
   Serial.println("(5) Display Packet Struct");
   Serial.println("\tExample Usage:\t$ Display Packet Struct");
+
+  Serial.println("(6) Set Torque Coil Configuration");
+  Serial.println("\tSyntax: GET TORQUE {board}:{coil} {config}");
+  Serial.println("\tExample Usage:\t$ SET TORQUE 1:1 COAST");
+
+  Serial.println("(7) Get All Torque Coil Configurations");
+  Serial.println("\tExample Usage:\t$ GET TORQUE");
+
+  Serial.println("(8) List Available Torque Coils and Configurations");
+  Serial.println("\tExample Usage:\t$ List Torque");
   Serial.print("\n\n$ ");
 }
 
@@ -353,18 +554,29 @@ void display_switches()
   Serial.println("Available Switches");
   Serial.println("========================================================");
   Serial.println("\t SW_3V3_1");
-  Serial.println("\t SW_3V3_2");
+  Serial.println("\t RFM23_RADIO");
   Serial.println("\t SW_5V_1");
-  Serial.println("\t SW_5V_2");
+  Serial.println("\t HEATER");
   Serial.println("\t SW_5V_3");
-  Serial.println("\t SW_5V_4");
   Serial.println("\t SW_12V");
   Serial.println("\t VBATT");
-  Serial.println("\t HBRIDGE1");
-  Serial.println("\t HBRIDGE2");
-  Serial.println("\t BURNALL");
   Serial.println("\t BURN1");
   Serial.println("\t BURN2");
+  Serial.print("\n\n$ ");
+}
+
+void display_torques()
+{
+  Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+  Serial.println("Board values: 1, 2");
+  Serial.println("Coil values: 1, 2");
+  Serial.println("Torque Coil Configurations");
+  Serial.println("========================================================");
+  Serial.println("\t SLEEP");
+  Serial.println("\t COAST");
+  Serial.println("\t BRAKE");
+  Serial.println("\t FORWARD");
+  Serial.println("\t REVERSE");
   Serial.print("\n\n$ ");
 }
 
@@ -379,8 +591,8 @@ void display_packet_struct()
   Serial.println("\n\n");
   Serial.println("When calling 'GET ALL' or 'SET ALL', the PDU returns a packet of 0s and 1s starting from the 1st index.");
   Serial.println("Below shows which index corresponds to which switch.");
-  Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-  Serial.println("+ DataSwitchTelem | 3V3_1 | 3V3_2 | 5V_1 | 5V_2 | 5V_3 | 5V_4 | 12V | VBATT | BURN1 | BURN2 | HBRIDGE1 | HBRIDGE2 +");
-  Serial.println("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+  Serial.println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+  Serial.println("+ DataSwitchTelem | 3V3_1 | RFM23 | 5V_1 | HEATER | 5V_3 | 12V | VBATT | BURN1 | BURN2 +");
+  Serial.println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
   Serial.print("\n\n$ ");
 }
