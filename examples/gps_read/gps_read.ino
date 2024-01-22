@@ -1,4 +1,4 @@
-/*This code connects the Adafruit Mini GPS PA1010D module.
+/*This code connects to the Adafruit Mini GPS PA1010D module.
 It initializes the module then sets the NMEA output and update rate.
 It then reads and parses the GPS data, and if it has a fix and is connected, it prints the relevant information to the Serial console.
 GPSECHO can be set to true to also echo the raw GPS data to the Serial console.*/
@@ -12,14 +12,12 @@ Adafruit_GPS GPS(&GPSSerial);
 // Set GPSECHO to "false" or "true" to turn on/off echoing the GPS data to the Serial console
 const bool GPSECHO = true;
 
-// Set the timer for the loop
-unsigned long timer = millis();
-
 // Global variable to store GPS connection status
 bool gpsConnected = false;
 
 void setup()
 {
+
     // Start the Serial port at 115200 baud rate
     Serial.begin(115200);
 
@@ -30,10 +28,10 @@ void setup()
     GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
 
     // Set the NMEA update rate to 1 Hz
-    GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
+    GPS.sendCommand(PMTK_SET_NMEA_UPDATE_200_MILLIHERTZ);
 
     // Give time for the GPS Module to steup and user to open the serial monitor
-    delay(10000);
+    delay(5000);
 
     // Check if GPS module is connected and store the status in the gpsConnected variable
     if (GPS.available() == 0)
@@ -56,6 +54,7 @@ void setup()
 
 void loop()
 {
+
     // Read data from the GPS in the 'main loop'
     char c = GPS.read();
 
@@ -70,9 +69,8 @@ void loop()
     {
         if (GPS.parse(GPS.lastNMEA()))
         {
-            if (GPS.fix && gpsConnected)
+            if (GPS.fix)
             {
-                // Print the date and time
                 Serial.print("\nTime: ");
                 if (GPS.hour < 10)
                 {
@@ -90,42 +88,29 @@ void loop()
                 {
                     Serial.print('0');
                 }
-                Serial.print(GPS.seconds, DEC);
-                Serial.print('.');
-                if (GPS.milliseconds < 10)
-                {
-                    Serial.print("00");
-                }
-                else if (GPS.milliseconds > 9 && GPS.milliseconds < 100)
-                {
-                    Serial.print("0");
-                }
-                Serial.println(GPS.milliseconds);
+                Serial.println(GPS.seconds, DEC);
                 Serial.print("Date: ");
                 Serial.print(GPS.day, DEC);
                 Serial.print('/');
                 Serial.print(GPS.month, DEC);
                 Serial.print("/20");
                 Serial.println(GPS.year, DEC);
-                // Print the fix, quality, location, speed, angle, altitude, and satellite information
                 Serial.print("Fix: ");
-                Serial.print((int)GPS.fix);
-                Serial.print(" quality: ");
-                Serial.println((int)GPS.fixquality);
+                Serial.println(GPS.fix ? "YES" : "NO");
+                Serial.print("Quality: ");
+                Serial.println(GPS.fixquality == 0 ? "No fix" : (GPS.fixquality == 1 ? "GPS fix" : (GPS.fixquality == 2 ? "Differential fix" : "Unknown fix status")));
+                Serial.print("Satellites: ");
+                Serial.println((int)GPS.satellites);
                 Serial.print("Location: ");
-                Serial.print(GPS.latitude, 4);
-                Serial.print(GPS.lat);
+                Serial.print(GPS.latitudeDegrees);
                 Serial.print(", ");
-                Serial.print(GPS.longitude, 4);
-                Serial.println(GPS.lon);
+                Serial.println(GPS.longitudeDegrees);
                 Serial.print("Speed (knots): ");
                 Serial.println(GPS.speed);
                 Serial.print("Angle: ");
                 Serial.println(GPS.angle);
                 Serial.print("Altitude: ");
                 Serial.println(GPS.altitude);
-                Serial.print("Satellites: ");
-                Serial.println((int)GPS.satellites);
             }
         }
     }
