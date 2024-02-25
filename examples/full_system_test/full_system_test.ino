@@ -47,7 +47,7 @@ Adafruit_LSM6DSOX lsm6dsox = Adafruit_LSM6DSOX();
 
 // Define the analog input pins for the temperature sensors and their labels
 const int sensorPins[] = {0, 1, 6, 7, 8, 9, 17};
-const char *sensorLabels[] = {"OBC Board", "PDU Board", "Battery Board", "Solar Panel 1", "Solar Panel 2", "Solar Panel 3", "Solar Panel 4"};
+const char *sensorLabels[] = {"OBC", "PDU", "Battery Board", "Solar Panel 1", "Solar Panel 2", "Solar Panel 3", "Solar Panel 4"};
 const int numSensors = sizeof(sensorPins) / sizeof(sensorPins[0]);
 
 // Raspberry Pi control
@@ -86,7 +86,7 @@ void setup()
     // Toggle relay state after a delay
     delay(3000);                    // 3 seconds delay
     digitalWrite(rpi_enable, HIGH); // Turn on the relay
-    Serial.print("Raspberry Pi has been powered on");
+    Serial.println("Raspberry Pi has been powered on");
 }
 
 void loop()
@@ -120,11 +120,11 @@ void loop()
 
     if (initSuccess)
     {
-        Serial.println("Radio is connected");
+        Serial.println("Radio has intialized");
     }
     else
     {
-        Serial.println("Radio is not detected");
+        Serial.println("Radio is not detected or failed to initialize");
     }
 
     // IMU loop
@@ -156,26 +156,19 @@ void loop()
         Serial.println("IMU is is not detected or not reading data.");
     }
 
-    // Current sensor loop
+    // Initialize I2C communication and configure each current sensor
     for (int i = 0; i < 5; i++)
     {
-        if (ina219[i].begin())
+        bool sensorConnected = ina219[i].begin(&Wire2); // Initialize each INA219 sensor and check if it's connected
+        if (sensorConnected)
         {
-            float current_mA = ina219[i].getCurrent_mA(); // Get the current reading in milliamps
-            Serial.print(ina219Labels[i]);                // Print the label for the current sensor
-            if (current_mA != 0)
-            {
-                Serial.println(" current sensor is connected and reading data.");
-            }
-            else
-            {
-                Serial.println(" current sensor is not reading data.");
-            }
+            Serial.print(ina219Labels[i]);
+            Serial.println(" current sensor is connected and reading data");
         }
         else
         {
-            Serial.print(ina219Labels[i]); // Print the label for the current sensor
-            Serial.println(" current sensor is not connected.");
+            Serial.print(ina219Labels[i]);
+            Serial.println(" current sensor is not detected");
         }
     }
 

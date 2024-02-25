@@ -28,7 +28,7 @@ void setup()
     GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
 
     // Set the NMEA update rate to 1 Hz
-    GPS.sendCommand(PMTK_SET_NMEA_UPDATE_200_MILLIHERTZ);
+    GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
 
     // Give time for the GPS Module to steup and user to open the serial monitor
     delay(5000);

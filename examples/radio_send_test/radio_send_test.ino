@@ -9,7 +9,7 @@ while tracking the number of sent messages and the radio module's temperature.*/
 int led = 13;
 
 const int CS_PIN = 38;   // 38
-const int INT_PIN = 8;   // 8 on 4.23   //40 on 4.24 or later
+const int INT_PIN = 40;  // 40 on 4.24 or later
 const int SPI_MISO = 39; // 39
 const int SPI_MOSI = 26; // 26
 const int SPI_SCK = 27;  // 27

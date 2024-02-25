@@ -31,7 +31,7 @@ const float MV_PER_DEGREE_F = 1.0;
 const float OFFSET_F = 58.0;
 const float MV_PER_ADC_UNIT = 3300.0 / 1024.0;
 
-// INA219
+// INA219 current sensors
 #define INA219_ADDR_SOLAR1 0x40
 #define INA219_ADDR_SOLAR2 0x41
 #define INA219_ADDR_SOLAR3 0x42
@@ -56,13 +56,14 @@ float readTemperatureCelsius(int sensorPin)
 
 void setup()
 {
-    // GPS Setup
     Serial.begin(115200);
+
+    // GPS Setup
     GPS.begin(9600);
     GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
     GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
-    GPS.sendCommand(PGCMD_ANTENNA);
-    delay(10000);
+    delay(5000);
+    // Check if GPS module is connected and store the status in the gpsConnected variable
     if (GPS.available() == 0)
     {
         Serial.println("GPS module not detected");
@@ -73,6 +74,8 @@ void setup()
         Serial.println("GPS module connected");
         gpsConnected = true;
     }
+
+    // Clear any data from the GPS module
     while (GPS.available())
     {
         GPS.read();
@@ -124,121 +127,122 @@ void loop()
     if (gpsConnected)
     {
         char c = GPS.read();
-        if (GPSECHO)
+        // If GPSECHO is true above, print the raw GPS data to the Serial console
+        if (GPSECHO && c)
         {
-            if (c)
-                Serial.print(c);
+            Serial.print(c);
         }
         if (GPS.newNMEAreceived())
         {
-            if (!GPS.parse(GPS.lastNMEA()))
+            if (GPS.parse(GPS.lastNMEA()))
             {
-                return;
+                if (GPS.fix)
+                {
+                    Serial.print("\nTime: ");
+                    if (GPS.hour < 10)
+                    {
+                        Serial.print('0');
+                    }
+                    Serial.print(GPS.hour, DEC);
+                    Serial.print(':');
+                    if (GPS.minute < 10)
+                    {
+                        Serial.print('0');
+                    }
+                    Serial.print(GPS.minute, DEC);
+                    Serial.print(':');
+                    if (GPS.seconds < 10)
+                    {
+                        Serial.print('0');
+                    }
+                    Serial.println(GPS.seconds, DEC);
+                    Serial.print("Date: ");
+                    Serial.print(GPS.day, DEC);
+                    Serial.print('/');
+                    Serial.print(GPS.month, DEC);
+                    Serial.print("/20");
+                    Serial.println(GPS.year, DEC);
+                    Serial.print("Fix: ");
+                    Serial.println(GPS.fix ? "YES" : "NO");
+                    Serial.print("Quality: ");
+                    Serial.println(GPS.fixquality == 0 ? "No fix" : (GPS.fixquality == 1 ? "GPS fix" : (GPS.fixquality == 2 ? "Differential fix" : "Unknown fix status")));
+                    Serial.print("Satellites: ");
+                    Serial.println((int)GPS.satellites);
+                    Serial.print("Location: ");
+                    Serial.print(GPS.latitudeDegrees);
+                    Serial.print(", ");
+                    Serial.println(GPS.longitudeDegrees);
+                    Serial.print("Speed (knots): ");
+                    Serial.println(GPS.speed);
+                    Serial.print("Angle: ");
+                    Serial.println(GPS.angle);
+                    Serial.print("Altitude: ");
+                    Serial.println(GPS.altitude);
+                }
             }
         }
-        if (timer > millis())
-            timer = millis();
-        if (millis() - timer > 5000)
+
+        // IMU Loop
+        if (imu_found)
         {
-            timer = millis();
-            Serial.print("\nTime: ");
-            Serial.print(GPS.hour, DEC);
-            Serial.print(':');
-            Serial.print(GPS.minute, DEC);
-            Serial.print(':');
-            Serial.print(GPS.seconds, DEC);
-            Serial.print('.');
-            Serial.println(GPS.milliseconds);
-            Serial.print("Date: ");
-            Serial.print(GPS.day, DEC);
-            Serial.print('/');
-            Serial.print(GPS.month, DEC);
-            Serial.print("/20");
-            Serial.println(GPS.year, DEC);
-            Serial.print("Fix: ");
-            Serial.print((int)GPS.fix);
-            Serial.print(" quality: ");
-            Serial.println((int)GPS.fixquality);
-            if (GPS.fix)
-            {
-                Serial.print("Location: ");
-                Serial.print(GPS.latitudeDegrees,
-                             4);
-                Serial.print(", ");
-                Serial.println(GPS.longitudeDegrees, 4);
-                Serial.print("Speed (knots): ");
-                Serial.println(GPS.speed);
-                Serial.print("Angle: ");
-                Serial.println(GPS.angle);
-                Serial.print("Altitude: ");
-                Serial.println(GPS.altitude);
-                Serial.print("Satellites: ");
-                Serial.println((int)GPS.satellites);
-                Serial.println();
-            }
+            sensors_event_t accel, gyro, temp, mag;
+            lsm6dsox.getEvent(&accel, &gyro, &temp);
+            lis.getEvent(&mag);
+
+            Serial.print("Acceleration (m/s^2): x = ");
+            Serial.print(accel.acceleration.x);
+            Serial.print(", y = ");
+            Serial.print(accel.acceleration.y);
+            Serial.print(", z = ");
+            Serial.println(accel.acceleration.z);
+
+            Serial.print("Gyro (dps): x = ");
+            Serial.print(gyro.gyro.x);
+            Serial.print(", y = ");
+            Serial.print(gyro.gyro.y);
+            Serial.print(", z = ");
+            Serial.println(gyro.gyro.z);
+
+            Serial.print("IMU Temperature (°C): ");
+            Serial.println(temp.temperature);
+
+            Serial.print("Magnetic field (uT): x = ");
+            Serial.print(mag.magnetic.x);
+            Serial.print(", y = ");
+            Serial.print(mag.magnetic.y);
+            Serial.print(", z = ");
+            Serial.println(mag.magnetic.z);
+            Serial.println();
+            delay(10000);
         }
-    }
 
-    // IMU Loop
-    if (imu_found)
-    {
-        sensors_event_t accel, gyro, temp, mag;
-        lsm6dsox.getEvent(&accel, &gyro, &temp);
-        lis.getEvent(&mag);
-
-        Serial.print("Acceleration (m/s^2): x = ");
-        Serial.print(accel.acceleration.x);
-        Serial.print(", y = ");
-        Serial.print(accel.acceleration.y);
-        Serial.print(", z = ");
-        Serial.println(accel.acceleration.z);
-
-        Serial.print("Gyro (dps): x = ");
-        Serial.print(gyro.gyro.x);
-        Serial.print(", y = ");
-        Serial.print(gyro.gyro.y);
-        Serial.print(", z = ");
-        Serial.println(gyro.gyro.z);
-
-        Serial.print("IMU Temperature (°C): ");
-        Serial.println(temp.temperature);
-
-        Serial.print("Magnetic field (uT): x = ");
-        Serial.print(mag.magnetic.x);
-        Serial.print(", y = ");
-        Serial.print(mag.magnetic.y);
-        Serial.print(", z = ");
-        Serial.println(mag.magnetic.z);
+        // Temperature Sensors Loop
+        for (int i = 0; i < NUM_SENSORS; i++)
+        {
+            float temperatureC = readTemperatureCelsius(TEMP_SENSOR_PINS[i]);
+            Serial.print(SENSOR_LABELS[i]);
+            Serial.print(" Temperature: ");
+            Serial.print(temperatureC);
+            Serial.println(" °C");
+        }
         Serial.println();
-        delay(10000);
-    }
+        delay(5000);
 
-    // Temperature Sensors Loop
-    for (int i = 0; i < NUM_SENSORS; i++)
-    {
-        float temperatureC = readTemperatureCelsius(TEMP_SENSOR_PINS[i]);
-        Serial.print(SENSOR_LABELS[i]);
-        Serial.print(" Temperature: ");
-        Serial.print(temperatureC);
-        Serial.println(" °C");
-    }
-    Serial.println();
-    delay(5000);
+        // INA219 Loop
+        for (int i = 0; i < 5; i++)
+        {
+            float current_mA = ina219s[i].getCurrent_mA();
+            float bus_voltage_V = ina219s[i].getBusVoltage_V();
 
-    // INA219 Loop
-    for (int i = 0; i < 5; i++)
-    {
-        float current_mA = ina219s[i].getCurrent_mA();
-        float bus_voltage_V = ina219s[i].getBusVoltage_V();
-
-        Serial.print(ina219Labels[i]);
-        Serial.print(" current: ");
-        Serial.print(current_mA);
-        Serial.print(" mA");
-        Serial.print(", bus voltage: ");
-        Serial.print(bus_voltage_V);
-        Serial.println(" V");
+            Serial.print(ina219Labels[i]);
+            Serial.print(" current: ");
+            Serial.print(current_mA);
+            Serial.print(" mA");
+            Serial.print(", bus voltage: ");
+            Serial.print(bus_voltage_V);
+            Serial.println(" V");
+        }
+        Serial.println();
+        delay(1000);
     }
-    Serial.println();
-    delay(1000);
 }
