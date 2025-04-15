@@ -2,7 +2,7 @@
 
 # Artemis CubeSat Kit Teensy 4.1 Software
 
-Welcome! Here you'll find Arduino software for the Artemis Cubesat Kit, a low-cost kit containing all the necessary subsystems for a 1U cubesat.
+Welcome! Here you'll find the Arduino Teensy 4.1 (microcontroller) software for the Artemis Cubesat Kit, a low-cost kit containing all the necessary subsystems for a 1U cubesat.
 
 The software available in this library is designed to break down the flight software from the Artemis Cubesat into individual components, enabling users to effectively test and evaluate various systems and elements of their satellite.
 
