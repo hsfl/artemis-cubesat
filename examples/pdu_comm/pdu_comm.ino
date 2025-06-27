@@ -24,7 +24,7 @@
 #include <string.h>
 /** NOTE FOR NEW USERS: There is a submodule/root folder called artemis-cubesat-protocols. 
  * You will need to go to /pdu folder and copy the pdu_protocol.h into the the same folder as this (/pdu_comm)
- * As of now, assume v1.0
+ * As of now, assume v1.0 of the protocol (June 27 2025. Confirmed working with PDU revision board v2.2 with MCU software v2.2.1)
  */
 #include "pdu_protocol.h"
 
