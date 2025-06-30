@@ -3,6 +3,13 @@
 
 #include <stdint.h>
 
+// Portable packed attribute macro
+#ifdef __GNUC__
+#define PACKED __attribute__((packed))
+#else
+#define PACKED
+#endif
+
 // -----------------------------------------------------------------------------
 // Artemis PDU ↔ OBC Simple Protocol Definitions (with Torque Coil Support)
 // v1.0 - June 27 2025
@@ -21,8 +28,8 @@
  * - DataPDUTelemetry  : PDU returns voltage/current/temperature telemetry.
  * - DataTorqueTelem   : PDU returns actual drive currents or status from torque coils.
  */
-enum class PDU_Type : uint8_t {
-    NOP               = 0,  /**< No operation */
+typedef enum {
+    NOP = 0,  /**< No operation */
     CommandPing,            /**< Request a Pong response */
     CommandSetSwitch,       /**< Set one switch on/off */
     CommandGetSwitchStatus, /**< Get state of one or all switches */
@@ -32,14 +39,14 @@ enum class PDU_Type : uint8_t {
     DataSwitchTelem,        /**< Switch state telemetry */
     DataPDUTelemetry,       /**< Power & thermal telemetry */
     DataTorqueTelem         /**< Torque coil telemetry */
-};
+} PDU_Type;
 
 /**
  * @brief Identifiers for PDU switches and torque coil drivers.
  *
  * "All" affects every switch; "None" is used when no switch action is desired.
  */
-enum class PDU_SW : uint8_t {
+typedef enum {
     None      = 0,  /**< No switch/coil selected */
     All,            /**< All switches */
     SW_3V3_1,       /**< 3.3 V bus #1 */
@@ -57,7 +64,7 @@ enum class PDU_SW : uint8_t {
     BURN1,          /**< Burn-wire heater #1 */
     BURN2,          /**< Burn-wire heater #2 */
     RPI             /**< Raspberry Pi power control */
-};
+} PDU_SW;
 
 /**
  * @brief Simple command/status packet structure.
@@ -67,33 +74,37 @@ enum class PDU_SW : uint8_t {
  * - sw_state: 0 = off, 1 = on (used for switch commands/status).
  * - trq_value: PWM duty (0–255) for torque coil commands.
  */
-struct __attribute__((packed)) pdu_packet {
+typedef struct PACKED {
     PDU_Type type;     /**< Packet type */
     PDU_SW    sw;       /**< Switch or coil identifier */
     uint8_t   sw_state; /**< Switch on/off state */
     uint8_t   trq_value;/**< Torque PWM value */
-};
+} pdu_packet;
 
 /**
  * @brief Telemetry packet reporting all switch states.
  *
  * The order of sw_state[] entries matches PDU_SW enum, excluding None and All.
  */
-struct __attribute__((packed)) pdu_telem {
+typedef struct PACKED {
     PDU_Type type;      /**< Should be DataSwitchTelem */
     uint8_t sw_state[12]; /**< States of each switch (1=on,0=off) */
-};
+} pdu_telem;
 
 // -----------------------------------------------------------------------------
 // Function prototypes
 // -----------------------------------------------------------------------------
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief Send a PDU packet over UART/SPI/etc.
  * @param packet The packet to send.
  * @return 0 on success, negative on error.
  */
-int32_t pdu_send(const pdu_packet &packet);
+int pdu_send(const pdu_packet *packet);
 
 /**
  * @brief Receive a raw response string from the PDU for simple parsing.
@@ -101,7 +112,7 @@ int32_t pdu_send(const pdu_packet &packet);
  * @param max_len Maximum buffer length.
  * @return Number of bytes received, or negative on error.
  */
-int32_t pdu_recv(char* response, uint16_t max_len);
+int pdu_recv(char* response, uint16_t max_len);
 
 // -----------------------------------------------------------------------------
 // Interactive console helpers
@@ -129,7 +140,6 @@ void display_switches();
  */
 extern uint32_t timeout;
 
-
 /**
  * @brief ASCII offset for PDU command characters.
  * 
@@ -140,5 +150,9 @@ extern uint32_t timeout;
  * Example: CommandPing (value 1) would be transmitted as ASCII character 49 ('1')
  */
 #define PDU_CMD_ASCII_OFFSET 48
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // PDU_PROTOCOL_H
