@@ -104,7 +104,7 @@ extern "C" {
  * @param packet The packet to send.
  * @return 0 on success, negative on error.
  */
-int pdu_send(const pdu_packet *packet);
+int32_t pdu_send(const pdu_packet *packet);
 
 /**
  * @brief Receive a raw response string from the PDU for simple parsing.
@@ -112,7 +112,7 @@ int pdu_send(const pdu_packet *packet);
  * @param max_len Maximum buffer length.
  * @return Number of bytes received, or negative on error.
  */
-int pdu_recv(char* response, uint16_t max_len);
+int32_t pdu_recv(char* response, uint16_t max_len);
 
 // -----------------------------------------------------------------------------
 // Interactive console helpers
