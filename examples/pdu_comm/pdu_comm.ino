@@ -30,13 +30,12 @@
 // Global timeout variable
 uint32_t timeout = 0;
 
-void setup()
-{
+void setup() {
   pdu_packet pdu_packet;
   char response[256];
 
   Serial.begin(9600);
-  Serial1.begin(9600); // Begin Serial Connection with the Artemis PDU on Serial1 (9600 Baud Rate for USART)
+  Serial1.begin(9600);  // Begin Serial Connection with the Artemis PDU on Serial1 (9600 Baud Rate for USART)
 
   while (!Serial || !Serial1)
     ;
@@ -47,20 +46,15 @@ void setup()
   pdu_packet.sw_state = 0;
   pdu_packet.trq_value = 0;
 
-  while (1)
-  {
+  while (1) {
     pdu_send(pdu_packet);
-    if (pdu_recv(response, sizeof(response)) > 0)
-    {
-      if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_ASCII_OFFSET)
-      {
+    if (pdu_recv(response, sizeof(response)) > 0) {
+      if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_ASCII_OFFSET) {
         // Decode ASCII-encoded response to binary struct
         pdu_pong_packet pong_pkt;
-        memset(&pong_pkt, 0, sizeof(pdu_pong_packet));
-        for (size_t i = 0; i < sizeof(pdu_pong_packet) && response[i]; i++)
-        {
-          ((char *)&pong_pkt)[i] = response[i] - PDU_CMD_ASCII_OFFSET;
-        }
+        pong_pkt.type = (PDU_Type)response[0];
+        memcpy(pong_pkt.version, response + 1, PDU_VERSION_MAX_LEN);
+        pong_pkt.version[PDU_VERSION_MAX_LEN - 1] = '\0';
         Serial.println("PDU Connection Established");
         Serial.print("PDU Version: ");
         Serial.println(pong_pkt.version);
@@ -73,46 +67,36 @@ void setup()
   display_options();
 }
 
-void loop()
-{
+void loop() {
   pdu_packet pdu_packet;
   char response[256];
 
-  if (Serial.available() > 0)
-  {
+  if (Serial.available() > 0) {
     String input = Serial.readString();
     Serial.println(input);
     input = input.toLowerCase();
 
-    if (input.indexOf("help") >= 0)
-    {
+    if (input.indexOf("help") >= 0) {
       display_options();
-    }
-    else if (input.indexOf("list") >= 0)
-    {
+    } else if (input.indexOf("list") >= 0) {
       display_switches();
-    }
-    else if (input.indexOf("ping") >= 0)
-    {
+    } else if (input.indexOf("ping") >= 0) {
       pdu_packet.type = PDU_Type::CommandPing;
       pdu_packet.sw = PDU_SW::None;
       pdu_packet.sw_state = 0;
       pdu_packet.trq_value = 0;
 
       timeout = 0;
-      while (1)
-      {
+      while (1) {
         pdu_send(pdu_packet);
-        if (pdu_recv(response, sizeof(response)) > 0)
-        {
-          if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_ASCII_OFFSET)
-          {
+        if (pdu_recv(response, sizeof(response)) > 0) {
+          if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_ASCII_OFFSET) {
             // Decode ASCII-encoded response to binary struct
             pdu_pong_packet pong_pkt;
-            memset(&pong_pkt, 0, sizeof(pdu_pong_packet));
-            for (size_t i = 0; i < sizeof(pdu_pong_packet) && response[i]; i++) {
-              ((char*)&pong_pkt)[i] = response[i] - PDU_CMD_ASCII_OFFSET;
-            }
+            pong_pkt.type = (PDU_Type)response[0];
+            memcpy(pong_pkt.version, response + 1, PDU_VERSION_MAX_LEN);
+            pong_pkt.version[PDU_VERSION_MAX_LEN - 1] = '\0';
+            Serial.println("PDU Connection Established");
             Serial.println("Got Pong");
             Serial.print("PDU Version: ");
             Serial.println(pong_pkt.version);
@@ -120,8 +104,7 @@ void loop()
           }
         }
 
-        if (timeout > 5000)
-        {
+        if (timeout > 5000) {
           Serial.println("Unable to Ping PDU");
           break;
         }
@@ -130,67 +113,51 @@ void loop()
       }
 
       Serial.print("$ ");
-    }
-    else if (input.indexOf("get") >= 0 || input.indexOf("set") >= 0)
-    {
+    } else if (input.indexOf("get") >= 0 || input.indexOf("set") >= 0) {
       uint8_t sw = get_sw(input.c_str());
-      if (sw == 0)
-      {
+      if (sw == 0) {
         Serial.println("Invalid Switch");
         display_options();
         goto end;
       }
       pdu_packet.sw = (PDU_SW)sw;
 
-      if (input.indexOf("set") >= 0)
-      {
+      if (input.indexOf("set") >= 0) {
         pdu_packet.type = PDU_Type::CommandSetSwitch;
 
-        if (input.indexOf("on") > 0)
-        {
+        if (input.indexOf("on") > 0) {
           pdu_packet.sw_state = 1;
-        }
-        else if (input.indexOf("off") > 0)
-        {
+        } else if (input.indexOf("off") > 0) {
           pdu_packet.sw_state = 0;
-        }
-        else
-        {
+        } else {
           Serial.println("Please indicate ON or OFF");
           goto end;
         }
-      }
-      else if (input.indexOf("get") >= 0)
-      {
+      } else if (input.indexOf("get") >= 0) {
         pdu_packet.type = PDU_Type::CommandGetSwitchStatus;
         pdu_packet.sw_state = 0;
       }
 
       pdu_packet.trq_value = 0;
 
-      while (1)
-      {
+      while (1) {
         pdu_send(pdu_packet);
 
         timeout = 0;
         int attempts = 1;
-        while (pdu_recv(response, sizeof(response)) < 0)
-        {
-          if (timeout > 5000)
-          {
+        while (pdu_recv(response, sizeof(response)) < 0) {
+          if (timeout > 5000) {
             Serial.print("Attempt ");
             Serial.print(attempts);
             Serial.println(": FAIL TO SEND CMD TO PDU");
             timeout = 0;
 
-            if (++attempts == 5)
-            {
+            if (++attempts == 5) {
               goto end;
             }
           }
         }
-        if ((response[1] == sw + PDU_CMD_ASCII_OFFSET) || (sw == (uint8_t)PDU_SW::All && response[0] == (uint8_t)PDU_Type::DataSwitchTelem + PDU_CMD_ASCII_OFFSET))
-        {
+        if ((response[1] == sw + PDU_CMD_ASCII_OFFSET) || (sw == (uint8_t)PDU_SW::All && response[0] == (uint8_t)PDU_Type::DataSwitchTelem + PDU_CMD_ASCII_OFFSET)) {
           break;
         }
 
@@ -201,9 +168,7 @@ void loop()
       Serial.println(response);
       Serial.print("$ ");
       goto end;
-    }
-    else
-    {
+    } else {
       Serial.println("Invalid Command (Type 'help' for help)");
       Serial.print("$ ");
       goto end;
@@ -213,14 +178,12 @@ void loop()
 end:;
 }
 
-int32_t pdu_send(const pdu_packet &packet)
-{
+int32_t pdu_send(const pdu_packet &packet) {
   char *cmd = (char *)malloc(sizeof(packet));
   memcpy(cmd, &packet, sizeof(packet));
 
   std::string msg = "";
-  for (size_t i = 0; i < sizeof(packet); i++)
-  {
+  for (size_t i = 0; i < sizeof(packet); i++) {
     msg += (cmd[i] + PDU_CMD_ASCII_OFFSET);
   }
   Serial1.print(msg.c_str());
@@ -228,8 +191,7 @@ int32_t pdu_send(const pdu_packet &packet)
   Serial1.flush();
 
   Serial.print("SENDING TO PDU: [");
-  for (size_t i = 0; i < msg.length(); i++)
-  {
+  for (size_t i = 0; i < msg.length(); i++) {
     Serial.print((unsigned)(msg[i] - PDU_CMD_ASCII_OFFSET));
   }
   Serial.println(']');
@@ -239,15 +201,12 @@ int32_t pdu_send(const pdu_packet &packet)
   return 0;
 }
 
-int32_t pdu_recv(char *response, uint16_t max_len)
-{
-  if (Serial1.available() > 0)
-  {
+int32_t pdu_recv(char *response, uint16_t max_len) {
+  if (Serial1.available() > 0) {
     String UART1_RX = Serial1.readString();
-    if (UART1_RX.length() > 0)
-    {
+    if (UART1_RX.length() > 0) {
       strncpy(response, UART1_RX.c_str(), max_len - 1);
-      response[max_len - 1] = '\0'; // Ensure null termination
+      response[max_len - 1] = '\0';  // Ensure null termination
 
       Serial1.clear();
       return UART1_RX.length();
@@ -257,69 +216,53 @@ int32_t pdu_recv(char *response, uint16_t max_len)
   return -1;
 }
 
-uint8_t get_sw(const char *str)
-{
-  if (strstr(str, "sw_3v3_1") != nullptr)
-  {
+uint8_t get_sw(const char *str) {
+  if (strstr(str, "sw_3v3_1") != nullptr) {
     return (uint8_t)PDU_SW::SW_3V3_1;
   }
-  if (strstr(str, "sw_3v3_2") != nullptr)
-  {
+  if (strstr(str, "sw_3v3_2") != nullptr) {
     return (uint8_t)PDU_SW::SW_3V3_2;
   }
-  if (strstr(str, "sw_5v_1") != nullptr)
-  {
+  if (strstr(str, "sw_5v_1") != nullptr) {
     return (uint8_t)PDU_SW::SW_5V_1;
   }
-  if (strstr(str, "sw_5v_2") != nullptr)
-  {
+  if (strstr(str, "sw_5v_2") != nullptr) {
     return (uint8_t)PDU_SW::SW_5V_2;
   }
-  if (strstr(str, "sw_5v_3") != nullptr)
-  {
+  if (strstr(str, "sw_5v_3") != nullptr) {
     return (uint8_t)PDU_SW::SW_5V_3;
   }
-  if (strstr(str, "sw_5v_4") != nullptr)
-  {
+  if (strstr(str, "sw_5v_4") != nullptr) {
     return (uint8_t)PDU_SW::SW_5V_4;
   }
-  if (strstr(str, "sw_12v") != nullptr)
-  {
+  if (strstr(str, "sw_12v") != nullptr) {
     return (uint8_t)PDU_SW::SW_12V;
   }
-  if (strstr(str, "vbatt") != nullptr)
-  {
+  if (strstr(str, "vbatt") != nullptr) {
     return (uint8_t)PDU_SW::VBATT;
   }
-  if (strstr(str, "hbridge1") != nullptr)
-  {
+  if (strstr(str, "hbridge1") != nullptr) {
     return (uint8_t)PDU_SW::HBRIDGE1;
   }
-  if (strstr(str, "hbridge2") != nullptr)
-  {
+  if (strstr(str, "hbridge2") != nullptr) {
     return (uint8_t)PDU_SW::HBRIDGE2;
   }
-  if (strstr(str, "burnall") != nullptr)
-  {
+  if (strstr(str, "burnall") != nullptr) {
     return (uint8_t)PDU_SW::BURN;
   }
-  if (strstr(str, "burn1") != nullptr)
-  {
+  if (strstr(str, "burn1") != nullptr) {
     return (uint8_t)PDU_SW::BURN1;
   }
-  if (strstr(str, "burn2") != nullptr)
-  {
+  if (strstr(str, "burn2") != nullptr) {
     return (uint8_t)PDU_SW::BURN2;
   }
-  if (strstr(str, "all") != nullptr)
-  {
+  if (strstr(str, "all") != nullptr) {
     return (uint8_t)PDU_SW::All;
   }
   return 0;
 }
 
-void display_options()
-{
+void display_options() {
   Serial.println("\n\n");
   Serial.println("PDU Command Options");
   Serial.println("========================================================");
@@ -334,8 +277,7 @@ void display_options()
   Serial.print("\n\n$ ");
 }
 
-void display_switches()
-{
+void display_switches() {
   Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
   Serial.println("Available Switches");
   Serial.println("========================================================");
