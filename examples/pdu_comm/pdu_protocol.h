@@ -91,6 +91,13 @@ typedef struct PACKED {
     uint8_t sw_state[12]; /**< States of each switch (1=on,0=off) */
 } pdu_telem;
 
+#define PDU_VERSION_MAX_LEN 32
+
+typedef struct PACKED {
+    PDU_Type type; // DataPong
+    char version[PDU_VERSION_MAX_LEN]; // Null-terminated version string
+} pdu_pong_packet;
+
 // -----------------------------------------------------------------------------
 // Function prototypes
 // -----------------------------------------------------------------------------

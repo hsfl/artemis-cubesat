@@ -1,28 +1,27 @@
 /**
  * @file pdu_comm.ino
  * @brief Artemis PDU Communication Example
- * 
+ *
  * This Arduino sketch demonstrates communication with the Artemis Power Distribution Unit (PDU).
  * It provides an interactive console interface for:
- * 
+ *
  * - Sending ping commands to verify PDU connectivity
  * - Controlling power switches (3.3V, 5V, 12V buses, heaters, burn wires, etc.)
  * - Reading switch status and telemetry data
  * - Configuring torque coils for attitude control
  * - Displaying available commands and switch options
- * 
+ *
  * The code uses the PDU protocol defined in pdu_protocol.h to communicate over UART
  * with the PDU board, converting numerical commands to ASCII for transmission.
- * 
+ *
  * @author Artemis CubeSat Team
  * @version 1.0
  */
 
-
 #include <stdint.h>
 #include <string>
 #include <string.h>
-/** NOTE FOR NEW USERS: There is a submodule/root folder called artemis-cubesat-protocols. 
+/** NOTE FOR NEW USERS: There is a submodule/root folder called artemis-cubesat-protocols.
  * You will need to go to /pdu folder and copy the pdu_protocol.h into the the same folder as this (/pdu_comm)
  * As of now, assume v1.0 of the protocol (June 27 2025. Confirmed working with PDU revision board v2.2 with MCU software v2.2.1)
  */
@@ -47,7 +46,7 @@ void setup()
   pdu_packet.sw = PDU_SW::None;
   pdu_packet.sw_state = 0;
   pdu_packet.trq_value = 0;
-  
+
   while (1)
   {
     pdu_send(pdu_packet);
@@ -55,11 +54,20 @@ void setup()
     {
       if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_ASCII_OFFSET)
       {
+        // Decode ASCII-encoded response to binary struct
+        pdu_pong_packet pong_pkt;
+        memset(&pong_pkt, 0, sizeof(pdu_pong_packet));
+        for (size_t i = 0; i < sizeof(pdu_pong_packet) && response[i]; i++)
+        {
+          ((char *)&pong_pkt)[i] = response[i] - PDU_CMD_ASCII_OFFSET;
+        }
         Serial.println("PDU Connection Established");
+        Serial.print("PDU Version: ");
+        Serial.println(pong_pkt.version);
         break;
       }
     }
-    delay(100);
+    delay(500);
   }
 
   display_options();
@@ -99,7 +107,15 @@ void loop()
         {
           if (response[0] == (uint8_t)PDU_Type::DataPong + PDU_CMD_ASCII_OFFSET)
           {
+            // Decode ASCII-encoded response to binary struct
+            pdu_pong_packet pong_pkt;
+            memset(&pong_pkt, 0, sizeof(pdu_pong_packet));
+            for (size_t i = 0; i < sizeof(pdu_pong_packet) && response[i]; i++) {
+              ((char*)&pong_pkt)[i] = response[i] - PDU_CMD_ASCII_OFFSET;
+            }
             Serial.println("Got Pong");
+            Serial.print("PDU Version: ");
+            Serial.println(pong_pkt.version);
             break;
           }
         }
@@ -223,7 +239,7 @@ int32_t pdu_send(const pdu_packet &packet)
   return 0;
 }
 
-int32_t pdu_recv(char* response, uint16_t max_len)
+int32_t pdu_recv(char *response, uint16_t max_len)
 {
   if (Serial1.available() > 0)
   {
@@ -241,7 +257,7 @@ int32_t pdu_recv(char* response, uint16_t max_len)
   return -1;
 }
 
-uint8_t get_sw(const char* str)
+uint8_t get_sw(const char *str)
 {
   if (strstr(str, "sw_3v3_1") != nullptr)
   {
@@ -304,7 +320,7 @@ uint8_t get_sw(const char* str)
 
 void display_options()
 {
-  Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+  Serial.println("\n\n");
   Serial.println("PDU Command Options");
   Serial.println("========================================================");
   Serial.println("(1) Ping");
