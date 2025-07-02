@@ -277,20 +277,23 @@ void display_options() {
   Serial.print("\n\n$ ");
 }
 
-void display_switches() {
-  Serial.println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+void display_switches()
+{
+  Serial.println("\n\n");
   Serial.println("Available Switches");
   Serial.println("========================================================");
+  Serial.println("\t All (This can be used to get all the switch statuses or turn them all on/off.)");
   Serial.println("\t SW_3V3_1");
   Serial.println("\t SW_3V3_2");
   Serial.println("\t SW_5V_1");
   Serial.println("\t SW_5V_2");
   Serial.println("\t SW_5V_3");
   Serial.println("\t SW_5V_4");
+  Serial.println("\t SW_12V");
   Serial.println("\t VBATT");
   Serial.println("\t HBRIDGE1");
   Serial.println("\t HBRIDGE2");
-  Serial.println("\t BURNALL");
+  Serial.println("\t BURN (This switch is for both BURN1 and BURN2.)");
   Serial.println("\t BURN1");
   Serial.println("\t BURN2");
   Serial.print("\n\n$ ");
